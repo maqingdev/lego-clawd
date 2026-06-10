@@ -8,7 +8,13 @@
         {
             "name": "PlatformIO",
             "includePath": [
+                "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/include",
                 "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/src",
+                "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ArduinoJson/src",
+                "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ESP32Servo/src",
+                "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/GFX Library for Arduino/src",
+                "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
+                "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/newlib/platform_include",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/esp_additions/freertos",
@@ -230,7 +236,6 @@
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
-                "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SPIFFS/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SimpleBLE/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Ticker/src",
@@ -240,13 +245,18 @@
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
-                "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                 ""
             ],
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
+                    "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/include",
                     "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/src",
+                    "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ArduinoJson/src",
+                    "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ESP32Servo/src",
+                    "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/GFX Library for Arduino/src",
+                    "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
+                    "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/newlib/platform_include",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/esp_additions/freertos",
@@ -468,7 +478,6 @@
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
-                    "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SPIFFS/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SimpleBLE/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Ticker/src",
@@ -478,7 +487,6 @@
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
-                    "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                     ""
                 ]
             },
@@ -488,6 +496,8 @@
                 "ARDUINO_USB_MODE=1",
                 "ARDUINO_RUNNING_CORE=1",
                 "ARDUINO_EVENT_RUNNING_CORE=1",
+                "ARDUINO_USB_MODE=1",
+                "ARDUINO_USB_CDC_ON_BOOT=1",
                 "HAVE_CONFIG_H",
                 "MBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\"",
                 "UNITY_INCLUDE_CONFIG_H",
