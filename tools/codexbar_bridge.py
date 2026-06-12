@@ -16,6 +16,7 @@ DEFAULT_USAGE_FILE = (
     Path.home()
     / "Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json"
 )
+DEFAULT_AI_STATUS_FILE = Path.home() / ".lego-clawd/ai-status.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,15 +30,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--once", action="store_true", help="Send/read once and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Print JSON without serial.")
     parser.add_argument(
+        "--idle-timeout",
+        type=float,
+        default=600.0,
+        help="Seconds after which a stale AI status falls back to idle.",
+    )
+    parser.add_argument(
         "--waiting",
         choices=("true", "false"),
-        default="false",
-        help="Whether the AI is waiting for user input. Defaults to false.",
+        help="Override AI state as waiting or idle.",
     )
+    parser.add_argument("--ai-status-file", type=Path, default=DEFAULT_AI_STATUS_FILE)
     parser.add_argument(
         "--waiting-file",
         type=Path,
-        help="Optional file containing true/false, 1/0, waiting/idle.",
+        help="Legacy file containing true/false, 1/0, waiting/idle.",
     )
     return parser.parse_args()
 
@@ -97,15 +104,58 @@ def format_reset(window: Any) -> str:
     return "--:--"
 
 
-def read_waiting(args: argparse.Namespace) -> bool:
+def normalize_activity(value: Any, waiting: Any = None) -> str:
+    if isinstance(waiting, bool) and waiting:
+        return "waiting"
+
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"idle", "ready"}:
+            return "idle"
+        if text in {"working", "running", "thinking"}:
+            return "working"
+        if text in {"waiting", "waiting_input", "waiting_approval", "done"}:
+            return "waiting"
+
+    if isinstance(waiting, bool):
+        return "waiting" if waiting else "idle"
+
+    return "idle"
+
+
+def status_is_stale(status: dict[str, Any], timeout_seconds: float) -> bool:
+    updated_at = status.get("updatedAt")
+    if not isinstance(updated_at, str) or timeout_seconds <= 0:
+        return False
+
+    try:
+        updated_time = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+
+    return (datetime.now().astimezone() - updated_time.astimezone()).total_seconds() > timeout_seconds
+
+
+def read_activity(args: argparse.Namespace) -> str:
     if args.waiting_file:
         try:
             text = args.waiting_file.read_text(encoding="utf-8").strip().lower()
-            return text in {"1", "true", "yes", "waiting", "wait"}
+            return "waiting" if text in {"1", "true", "yes", "waiting", "wait"} else "idle"
         except FileNotFoundError:
-            return False
+            return "idle"
 
-    return args.waiting == "true"
+    if args.waiting is not None:
+      return "waiting" if args.waiting == "true" else "idle"
+
+    try:
+        status = load_json(args.ai_status_file)
+    except FileNotFoundError:
+        return "idle"
+
+    if status_is_stale(status, args.idle_timeout):
+        return "idle"
+
+    return normalize_activity(status.get("state") or status.get("aiState"), status.get("waiting"))
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -113,13 +163,15 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     codex = codex_provider(data)
     primary = codex.get("primary")
     secondary = codex.get("secondary")
+    activity = read_activity(args)
 
     return {
         "codex5h": percent(primary),
         "codex1w": percent(secondary),
         "reset5h": format_reset(primary),
         "reset1w": format_reset(secondary),
-        "waiting": read_waiting(args),
+        "aiState": activity,
+        "waiting": activity == "waiting",
     }
 
 

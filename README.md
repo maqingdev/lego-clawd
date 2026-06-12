@@ -248,7 +248,7 @@ usage and agent state.
 Example:
 
 ```json
-{"codex5h":76,"codex1w":58,"reset5h":"18:30","reset1w":"Mon 09:00","waiting":false}
+{"codex5h":76,"codex1w":58,"reset5h":"18:30","reset1w":"Mon 09:00","aiState":"working","waiting":false}
 ```
 
 Supported keys:
@@ -257,7 +257,8 @@ Supported keys:
 - `codex1w` or `oneWeekRemainingPct`: remaining 1-week quota percent
 - `reset5h` or `fiveHourResetAt`: display text for the 5-hour reset time
 - `reset1w` or `oneWeekResetAt`: display text for the 1-week reset time
-- `waiting` or `aiWaitingForInput`: when `true`, the servo arm raises
+- `aiState` or `state`: `idle`, `working`, or `waiting`
+- `waiting` or `aiWaitingForInput`: legacy boolean; when `true`, the servo arm raises
 
 Without serial input, the firmware displays built-in mock usage data.
 
@@ -293,6 +294,79 @@ To force the arm raised while testing:
 ```sh
 ~/.platformio/penv/bin/python tools/codexbar_bridge.py --waiting true
 ```
+
+### AI Activity States
+
+The firmware intentionally uses only three AI activity states:
+
+| State | LCD pill | Servo behavior |
+|---|---|---|
+| `idle` | IDLE | arm down |
+| `working` | WORKING | small back-and-forth motion |
+| `waiting` | WAITING | arm raised |
+
+The bridge reads `~/.lego-clawd/ai-status.json` by default. A Codex hook can
+write that file whenever the agent state changes:
+
+```json
+{"state":"working","waiting":false,"updatedAt":"2026-06-11T10:30:00+08:00"}
+```
+
+If the status file is stale for more than 10 minutes, the bridge falls back to
+`idle` so the arm returns down during long idle periods. Override with
+`--idle-timeout SECONDS`; use `--idle-timeout 0` to disable the fallback.
+
+Suggested global `~/.codex/hooks.json` mapping:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/codex_status_hook.py working"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/codex_status_hook.py working"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/codex_status_hook.py working"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/codex_status_hook.py waiting"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Copy `tools/codex_status_hook.py` to `~/.codex/hooks/codex_status_hook.py` and
+trust the hook from Codex settings or `/hooks`.
 
 ### Milestone 5: Usage Data Integration
 

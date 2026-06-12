@@ -7,9 +7,16 @@ struct UsageWindow {
   String resetAt = "--:--";
 };
 
+enum class AiActivity : uint8_t {
+  Idle,
+  Working,
+  Waiting,
+};
+
 struct AppState {
   UsageWindow codex5h;
   UsageWindow codex1w;
+  AiActivity aiActivity = AiActivity::Idle;
   bool aiWaitingForInput = false;
   uint32_t lastUpdateMs = 0;
 };

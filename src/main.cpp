@@ -40,20 +40,36 @@ void scheduleEyeChange() {
 }
 
 void renderCurrentScreen() {
+  const bool usageAlert =
+      state.codex5h.remainingPercent < Config::UsageAlertThresholdPercent ||
+      state.codex1w.remainingPercent < Config::UsageAlertThresholdPercent;
+  if (!usageAlert && screen != ScreenMode::Face) {
+    screen = ScreenMode::Face;
+  }
+
   switch (screen) {
     case ScreenMode::Face:
-      display.renderFace(eyeExpression, state.aiWaitingForInput);
+      display.renderFace(eyeExpression, state.aiActivity);
       break;
     case ScreenMode::Codex5h:
-      display.renderUsage("Codex 5h", state.codex5h, state.aiWaitingForInput);
+      display.renderUsage("Codex 5h", state.codex5h, state.aiActivity);
       break;
     case ScreenMode::Codex1w:
-      display.renderUsage("Codex 1w", state.codex1w, state.aiWaitingForInput);
+      display.renderUsage("Codex 1w", state.codex1w, state.aiActivity);
       break;
   }
 }
 
 void advanceScreen() {
+  const bool showUsage =
+      state.codex5h.remainingPercent < Config::UsageAlertThresholdPercent ||
+      state.codex1w.remainingPercent < Config::UsageAlertThresholdPercent;
+  if (!showUsage) {
+    screen = ScreenMode::Face;
+    renderCurrentScreen();
+    return;
+  }
+
   if (screen == ScreenMode::Face) {
     screen = ScreenMode::Codex5h;
   } else if (screen == ScreenMode::Codex5h) {
@@ -74,7 +90,7 @@ void setup() {
   randomSeed(esp_random());
   usageData.begin(state);
   servoArm.begin();
-  servoArm.setWaitingForInput(state.aiWaitingForInput);
+  servoArm.setActivity(state.aiActivity);
 
   display.begin();
   renderCurrentScreen();
@@ -86,7 +102,7 @@ void loop() {
   const uint32_t now = millis();
 
   if (usageData.readSerialUpdate(Serial, state)) {
-    servoArm.setWaitingForInput(state.aiWaitingForInput);
+    servoArm.setActivity(state.aiActivity);
     renderCurrentScreen();
   }
 

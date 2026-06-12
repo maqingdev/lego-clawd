@@ -14,7 +14,7 @@ Arduino_DataBus *bus = new Arduino_HWSPI(
 Arduino_GFX *gfx = new Arduino_ST7789(
     bus,
     Config::LcdResetPin,
-    1,
+    Config::LcdRotation,
     true,
     170,
     320,
@@ -41,16 +41,16 @@ bool DisplayUi::begin() {
   return true;
 }
 
-void DisplayUi::renderFace(EyeExpression expression, bool waiting) {
+void DisplayUi::renderFace(EyeExpression expression, AiActivity activity) {
   const uint16_t orange = rgb(245, 126, 32);
   gfx->fillScreen(orange);
 
-  drawEye(64, 52, 64, 58, expression, true);
-  drawEye(192, 52, 64, 58, expression, false);
-  drawStatusPill(waiting);
+  drawEye(24, 52, 64, 58, expression, true);
+  drawEye(232, 52, 64, 58, expression, false);
+  drawStatusPill(activity);
 }
 
-void DisplayUi::renderUsage(const char *title, const UsageWindow &window, bool waiting) {
+void DisplayUi::renderUsage(const char *title, const UsageWindow &window, AiActivity activity) {
   const uint16_t background = rgb(18, 18, 18);
   const uint16_t muted = rgb(168, 168, 168);
   const uint16_t accent = percentColor(window.remainingPercent);
@@ -74,7 +74,7 @@ void DisplayUi::renderUsage(const char *title, const UsageWindow &window, bool w
   gfx->print(window.resetAt);
 
   drawProgressBar(22, 142, 276, 14, window.remainingPercent);
-  drawStatusPill(waiting);
+  drawStatusPill(activity);
 }
 
 uint16_t DisplayUi::rgb(uint8_t red, uint8_t green, uint8_t blue) const {
@@ -111,14 +111,17 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
   }
 }
 
-void DisplayUi::drawStatusPill(bool waiting) {
-  const uint16_t pill = waiting ? rgb(35, 120, 255) : rgb(45, 45, 45);
-  const uint16_t text = waiting ? White : rgb(190, 190, 190);
+void DisplayUi::drawStatusPill(AiActivity activity) {
+  const bool waiting = activity == AiActivity::Waiting;
+  const bool working = activity == AiActivity::Working;
+  const uint16_t pill = waiting ? rgb(35, 120, 255)
+                                : working ? rgb(59, 145, 88) : rgb(45, 45, 45);
+  const uint16_t text = waiting || working ? White : rgb(190, 190, 190);
   gfx->fillRoundRect(232, 10, 76, 22, 6, pill);
   gfx->setTextColor(text);
   gfx->setTextSize(1);
-  gfx->setCursor(244, 17);
-  gfx->print(waiting ? "WAITING" : "IDLE");
+  gfx->setCursor(238, 17);
+  gfx->print(waiting ? "WAITING" : working ? "WORKING" : "IDLE");
 }
 
 void DisplayUi::drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h,

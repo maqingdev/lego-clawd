@@ -7,6 +7,7 @@ void UsageData::begin(AppState &state) {
   state.codex5h.resetAt = "18:30";
   state.codex1w.remainingPercent = 58;
   state.codex1w.resetAt = "Mon 09:00";
+  state.aiActivity = AiActivity::Idle;
   state.aiWaitingForInput = false;
   state.lastUpdateMs = millis();
 }
@@ -67,15 +68,52 @@ bool UsageData::applyJsonLine(const String &line, AppState &state) {
     state.codex1w.resetAt = doc["oneWeekResetAt"].as<const char *>();
   }
 
-  if (doc["waiting"].is<bool>()) {
+  if (doc["aiState"].is<const char *>() || doc["state"].is<const char *>()) {
+    state.aiActivity = activityFromJson(doc, state.aiActivity);
+    state.aiWaitingForInput = state.aiActivity == AiActivity::Waiting;
+  } else if (doc["waiting"].is<bool>()) {
     state.aiWaitingForInput = doc["waiting"].as<bool>();
+    state.aiActivity = state.aiWaitingForInput ? AiActivity::Waiting : AiActivity::Idle;
   } else if (doc["aiWaitingForInput"].is<bool>()) {
     state.aiWaitingForInput = doc["aiWaitingForInput"].as<bool>();
+    state.aiActivity = state.aiWaitingForInput ? AiActivity::Waiting : AiActivity::Idle;
   }
 
   state.lastUpdateMs = millis();
   Serial.println("usage update OK");
   return true;
+}
+
+AiActivity UsageData::activityFromJson(const JsonDocument &doc, AiActivity fallback) {
+  if (doc["aiState"].is<const char *>()) {
+    return activityFromText(doc["aiState"].as<const char *>(), fallback);
+  }
+  if (doc["state"].is<const char *>()) {
+    return activityFromText(doc["state"].as<const char *>(), fallback);
+  }
+  return fallback;
+}
+
+AiActivity UsageData::activityFromText(const char *value, AiActivity fallback) {
+  if (value == nullptr) {
+    return fallback;
+  }
+
+  String text(value);
+  text.toLowerCase();
+
+  if (text == "idle" || text == "ready") {
+    return AiActivity::Idle;
+  }
+  if (text == "working" || text == "running" || text == "thinking") {
+    return AiActivity::Working;
+  }
+  if (text == "waiting" || text == "waiting_input" || text == "waiting_approval" ||
+      text == "done") {
+    return AiActivity::Waiting;
+  }
+
+  return fallback;
 }
 
 uint8_t UsageData::percentFromJson(int value, uint8_t fallback) {
