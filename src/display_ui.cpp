@@ -56,6 +56,17 @@ void DisplayUi::renderFace(EyeExpression expression, AiActivity activity,
   drawDebugState(activity, idleInSeconds);
 }
 
+void DisplayUi::renderWorkingBrows(EyeExpression expression) {
+  if (expression != EyeExpression::Strain) {
+    expression = EyeExpression::Focused;
+  }
+
+  clearWorkingBrow(24, 52, 64);
+  clearWorkingBrow(232, 52, 64);
+  drawWorkingBrow(24, 52, 64, expression, true);
+  drawWorkingBrow(232, 52, 64, expression, false);
+}
+
 void DisplayUi::renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
                                    AiActivity activity, int16_t idleInSeconds) {
   gfx->fillScreen(faceBackground());
@@ -112,21 +123,30 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
   gfx->fillRoundRect(x + offsetX, eyeY, w, eyeH, 8, Black);
 
   if (expression == EyeExpression::Focused || expression == EyeExpression::Strain) {
-    for (int i = 0; i < 4; ++i) {
-      if (leftEye) {
-        const int16_t y1 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
-        const int16_t y2 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
-        gfx->drawLine(x, y1, x + w, y2, Black);
-      } else {
-        const int16_t y1 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
-        const int16_t y2 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
-        gfx->drawLine(x, y1, x + w, y2, Black);
-      }
-    }
+    drawWorkingBrow(x, y, w, expression, leftEye);
   }
 
   if (expression == EyeExpression::Happy) {
     gfx->fillRect(x + offsetX, eyeY, w, 10, Black);
+  }
+}
+
+void DisplayUi::clearWorkingBrow(int16_t x, int16_t y, int16_t w) {
+  gfx->fillRect(x - 6, y - 18, w + 12, 28, faceBackground());
+}
+
+void DisplayUi::drawWorkingBrow(int16_t x, int16_t y, int16_t w,
+                                EyeExpression expression, bool leftEye) {
+  for (int i = 0; i < 4; ++i) {
+    if (leftEye) {
+      const int16_t y1 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
+      const int16_t y2 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
+      gfx->drawLine(x, y1, x + w, y2, Black);
+    } else {
+      const int16_t y1 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
+      const int16_t y2 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
+      gfx->drawLine(x, y1, x + w, y2, Black);
+    }
   }
 }
 

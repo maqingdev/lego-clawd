@@ -105,9 +105,15 @@ void updateFaceExpression(uint32_t now) {
       blinkUntilMs = now + Config::BlinkMs;
       renderCurrentScreen();
     } else if (blinkUntilMs == 0 && now >= nextWorkingStrainMs) {
+      const bool canUpdateBrowsOnly = eyeExpression == EyeExpression::Focused ||
+                                      eyeExpression == EyeExpression::Strain;
       workingStrained = !workingStrained;
       eyeExpression = workingStrained ? EyeExpression::Strain : EyeExpression::Focused;
-      renderCurrentScreen();
+      if (canUpdateBrowsOnly) {
+        display.renderWorkingBrows(eyeExpression);
+      } else {
+        renderCurrentScreen();
+      }
       scheduleWorkingStrain(now);
     } else if (blinkUntilMs == 0 && eyeExpression != EyeExpression::Focused &&
                eyeExpression != EyeExpression::Strain) {
