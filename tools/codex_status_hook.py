@@ -19,7 +19,9 @@ def normalize_state(value: str) -> str:
         return "idle"
     if text in {"working", "running", "thinking"}:
         return "working"
-    if text in {"waiting", "waiting_input", "waiting_approval", "done"}:
+    if text in {"pending", "approval", "waiting_approval", "asking_approval"}:
+        return "pending"
+    if text in {"waiting", "waiting_input", "done"}:
         return "waiting"
     return "idle"
 
@@ -53,6 +55,7 @@ def main() -> int:
     payload = {
         "state": state,
         "waiting": state == "waiting",
+        "pending": state == "pending",
         "updatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
         "hookEvent": hook_input.get("hook_event_name"),
         "sessionId": hook_input.get("session_id"),
@@ -65,6 +68,11 @@ def main() -> int:
     tmp_file = base / "ai-status.json.tmp"
     tmp_file.write_text(json.dumps(payload, separators=(",", ":")) + "\n", encoding="utf-8")
     tmp_file.replace(status_file)
+
+    events_file = base / "hook-events.jsonl"
+    with events_file.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(payload, separators=(",", ":")) + "\n")
+
     return 0
 
 

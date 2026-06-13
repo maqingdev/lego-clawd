@@ -18,6 +18,8 @@ EyeExpression eyeExpression = EyeExpression::Neutral;
 uint32_t lastScreenSwitchMs = 0;
 uint32_t nextEyeChangeMs = 0;
 uint32_t blinkUntilMs = 0;
+uint32_t usagePeekStartedMs = 0;
+uint32_t nextWorkingBlinkMs = 0;
 
 EyeExpression randomEyeExpression() {
   switch (random(0, 5)) {
@@ -39,42 +41,103 @@ void scheduleEyeChange() {
                                       Config::EyeExpressionIntervalMaxMs);
 }
 
-void renderCurrentScreen() {
-  const bool usageAlert =
-      state.codex5h.remainingPercent < Config::UsageAlertThresholdPercent ||
-      state.codex1w.remainingPercent < Config::UsageAlertThresholdPercent;
-  if (!usageAlert && screen != ScreenMode::Face) {
-    screen = ScreenMode::Face;
-  }
+void scheduleWorkingBlink() {
+  nextWorkingBlinkMs = millis() + random(Config::WorkingBlinkIntervalMinMs,
+                                         Config::WorkingBlinkIntervalMaxMs);
+}
 
+void renderCurrentScreen() {
   switch (screen) {
     case ScreenMode::Face:
-      display.renderFace(eyeExpression, state.aiActivity);
+      display.renderFace(eyeExpression, state.aiActivity, state.idleInSeconds);
       break;
-    case ScreenMode::Codex5h:
-      display.renderUsage("Codex 5h", state.codex5h, state.aiActivity);
-      break;
-    case ScreenMode::Codex1w:
-      display.renderUsage("Codex 1w", state.codex1w, state.aiActivity);
+    case ScreenMode::Usage:
+      display.renderUsageSummary(state.codex5h, state.codex1w, state.aiActivity,
+                                 state.idleInSeconds);
       break;
   }
 }
 
-void advanceScreen() {
-  const bool showUsage =
-      state.codex5h.remainingPercent < Config::UsageAlertThresholdPercent ||
-      state.codex1w.remainingPercent < Config::UsageAlertThresholdPercent;
-  if (!showUsage) {
-    screen = ScreenMode::Face;
-    renderCurrentScreen();
+void updateScreenSchedule(uint32_t now) {
+  if (state.aiActivity != AiActivity::Idle) {
+    if (screen != ScreenMode::Face) {
+      screen = ScreenMode::Face;
+      renderCurrentScreen();
+    }
     return;
   }
 
-  if (screen == ScreenMode::Face) {
-    screen = ScreenMode::Codex5h;
-  } else if (screen == ScreenMode::Codex5h) {
-    screen = ScreenMode::Codex1w;
-  } else {
+  if (screen == ScreenMode::Usage) {
+    if (now - usagePeekStartedMs >= Config::UsagePeekDurationMs) {
+      screen = ScreenMode::Face;
+      lastScreenSwitchMs = now;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
+  if (now - lastScreenSwitchMs >= Config::UsagePeekIntervalMs) {
+    screen = ScreenMode::Usage;
+    usagePeekStartedMs = now;
+    renderCurrentScreen();
+  }
+}
+
+void updateFaceExpression(uint32_t now) {
+  if (screen != ScreenMode::Face) {
+    return;
+  }
+
+  if (state.aiActivity == AiActivity::Working) {
+    if (blinkUntilMs > 0 && now >= blinkUntilMs) {
+      blinkUntilMs = 0;
+      eyeExpression = EyeExpression::Focused;
+      renderCurrentScreen();
+      scheduleWorkingBlink();
+    } else if (blinkUntilMs == 0 && now >= nextWorkingBlinkMs) {
+      eyeExpression = EyeExpression::Blink;
+      blinkUntilMs = now + Config::BlinkMs;
+      renderCurrentScreen();
+    } else if (blinkUntilMs == 0 && eyeExpression != EyeExpression::Focused) {
+      eyeExpression = EyeExpression::Focused;
+      renderCurrentScreen();
+      if (nextWorkingBlinkMs == 0) {
+        scheduleWorkingBlink();
+      }
+    }
+    return;
+  }
+
+  if (state.aiActivity == AiActivity::Pending) {
+    if (eyeExpression != EyeExpression::Wide) {
+      eyeExpression = EyeExpression::Wide;
+      blinkUntilMs = 0;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
+  if (eyeExpression == EyeExpression::Focused || eyeExpression == EyeExpression::Wide) {
+    eyeExpression = EyeExpression::Neutral;
+    renderCurrentScreen();
+    scheduleEyeChange();
+    return;
+  }
+
+  if (blinkUntilMs > 0 && now >= blinkUntilMs) {
+    blinkUntilMs = 0;
+    eyeExpression = randomEyeExpression();
+    renderCurrentScreen();
+    scheduleEyeChange();
+  } else if (blinkUntilMs == 0 && now >= nextEyeChangeMs) {
+    eyeExpression = EyeExpression::Blink;
+    blinkUntilMs = now + Config::BlinkMs;
+    renderCurrentScreen();
+  }
+}
+
+void forceFaceScreen() {
+  if (state.aiActivity != AiActivity::Idle) {
     screen = ScreenMode::Face;
   }
   renderCurrentScreen();
@@ -96,6 +159,7 @@ void setup() {
   renderCurrentScreen();
   lastScreenSwitchMs = millis();
   scheduleEyeChange();
+  scheduleWorkingBlink();
 }
 
 void loop() {
@@ -103,26 +167,11 @@ void loop() {
 
   if (usageData.readSerialUpdate(Serial, state)) {
     servoArm.setActivity(state.aiActivity);
-    renderCurrentScreen();
+    forceFaceScreen();
   }
 
-  if (now - lastScreenSwitchMs >= Config::ScreenIntervalMs) {
-    lastScreenSwitchMs = now;
-    advanceScreen();
-  }
-
-  if (screen == ScreenMode::Face) {
-    if (blinkUntilMs > 0 && now >= blinkUntilMs) {
-      blinkUntilMs = 0;
-      eyeExpression = randomEyeExpression();
-      renderCurrentScreen();
-      scheduleEyeChange();
-    } else if (blinkUntilMs == 0 && now >= nextEyeChangeMs) {
-      eyeExpression = EyeExpression::Blink;
-      blinkUntilMs = now + Config::BlinkMs;
-      renderCurrentScreen();
-    }
-  }
+  updateScreenSchedule(now);
+  updateFaceExpression(now);
 
   servoArm.update();
   delay(5);

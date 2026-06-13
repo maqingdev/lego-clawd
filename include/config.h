@@ -16,10 +16,12 @@ constexpr uint8_t LcdRotation = 3;
 
 constexpr int DisplayWidth = 320;
 constexpr int DisplayHeight = 170;
-constexpr uint32_t ScreenIntervalMs = 10000;
-constexpr uint8_t UsageAlertThresholdPercent = 50;
+constexpr uint32_t UsagePeekIntervalMs = 30000;
+constexpr uint32_t UsagePeekDurationMs = 5000;
 constexpr uint32_t EyeExpressionIntervalMinMs = 6500;
 constexpr uint32_t EyeExpressionIntervalMaxMs = 12000;
+constexpr uint32_t WorkingBlinkIntervalMinMs = 12000;
+constexpr uint32_t WorkingBlinkIntervalMaxMs = 22000;
 constexpr uint32_t BlinkMs = 120;
 
 // Change this after wiring the servo signal line to a known free GPIO.

@@ -42,6 +42,7 @@ void ServoArm::setActivity(AiActivity activity) {
       workSwingForward_ = true;
       setTargetAngle(Config::ServoWorkMaxAngle);
       break;
+    case AiActivity::Pending:
     case AiActivity::Waiting:
       setTargetAngle(Config::ServoRaisedAngle);
       break;

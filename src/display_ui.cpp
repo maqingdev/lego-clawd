@@ -1,6 +1,8 @@
 #include "display_ui.h"
 
 #include <Arduino_GFX_Library.h>
+#include <cstdio>
+#include <cstring>
 #include "config.h"
 
 namespace {
@@ -24,9 +26,6 @@ Arduino_GFX *gfx = new Arduino_ST7789(
     0);
 
 constexpr uint16_t Black = 0x0000;
-constexpr uint16_t White = 0xffff;
-constexpr uint16_t Dark = 0x18e3;
-
 }
 
 bool DisplayUi::begin() {
@@ -41,44 +40,40 @@ bool DisplayUi::begin() {
   return true;
 }
 
-void DisplayUi::renderFace(EyeExpression expression, AiActivity activity) {
-  const uint16_t orange = rgb(245, 126, 32);
-  gfx->fillScreen(orange);
+void DisplayUi::renderFace(EyeExpression expression, AiActivity activity,
+                           int16_t idleInSeconds) {
+  if (activity == AiActivity::Working && expression != EyeExpression::Blink) {
+    expression = EyeExpression::Focused;
+  } else if (activity == AiActivity::Pending && expression != EyeExpression::Blink) {
+    expression = EyeExpression::Wide;
+  }
+
+  gfx->fillScreen(faceBackground());
 
   drawEye(24, 52, 64, 58, expression, true);
   drawEye(232, 52, 64, 58, expression, false);
-  drawStatusPill(activity);
+  drawDebugState(activity, idleInSeconds);
 }
 
-void DisplayUi::renderUsage(const char *title, const UsageWindow &window, AiActivity activity) {
-  const uint16_t background = rgb(18, 18, 18);
-  const uint16_t muted = rgb(168, 168, 168);
-  const uint16_t accent = percentColor(window.remainingPercent);
-
-  gfx->fillScreen(background);
-  gfx->setTextColor(White);
+void DisplayUi::renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
+                                   AiActivity activity, int16_t idleInSeconds) {
+  gfx->fillScreen(faceBackground());
+  gfx->setTextColor(Black);
   gfx->setTextSize(2);
-  gfx->setCursor(14, 14);
-  gfx->print(title);
+  gfx->setCursor(124, 12);
+  gfx->print("USAGE");
 
-  gfx->setTextColor(accent);
-  gfx->setTextSize(5);
-  gfx->setCursor(22, 52);
-  gfx->print(window.remainingPercent);
-  gfx->print("%");
-
-  gfx->setTextColor(muted);
-  gfx->setTextSize(2);
-  gfx->setCursor(22, 114);
-  gfx->print("reset ");
-  gfx->print(window.resetAt);
-
-  drawProgressBar(22, 142, 276, 14, window.remainingPercent);
-  drawStatusPill(activity);
+  drawUsageBlock(22, "5H", codex5h);
+  drawUsageBlock(176, "1W", codex1w);
+  drawDebugState(activity, idleInSeconds);
 }
 
 uint16_t DisplayUi::rgb(uint8_t red, uint8_t green, uint8_t blue) const {
   return ((red & 0xf8) << 8) | ((green & 0xfc) << 3) | (blue >> 3);
+}
+
+uint16_t DisplayUi::faceBackground() const {
+  return rgb(244, 164, 10);
 }
 
 void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
@@ -95,6 +90,12 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
   if (expression == EyeExpression::Sleepy) {
     eyeH = 24;
     eyeY = y + 18;
+  } else if (expression == EyeExpression::Focused) {
+    eyeH = 34;
+    eyeY = y + 18;
+  } else if (expression == EyeExpression::Wide) {
+    eyeH = 70;
+    eyeY = y - 6;
   } else if (expression == EyeExpression::Happy) {
     eyeH = 38;
     eyeY = y + 8;
@@ -106,27 +107,64 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
 
   gfx->fillRoundRect(x + offsetX, eyeY, w, eyeH, 8, Black);
 
+  if (expression == EyeExpression::Focused) {
+    for (int i = 0; i < 4; ++i) {
+      if (leftEye) {
+        gfx->drawLine(x, y - 8 + i, x + w, y - 2 + i, Black);
+      } else {
+        gfx->drawLine(x, y - 2 + i, x + w, y - 8 + i, Black);
+      }
+    }
+  }
+
   if (expression == EyeExpression::Happy) {
     gfx->fillRect(x + offsetX, eyeY, w, 10, Black);
   }
 }
 
-void DisplayUi::drawStatusPill(AiActivity activity) {
-  const bool waiting = activity == AiActivity::Waiting;
-  const bool working = activity == AiActivity::Working;
-  const uint16_t pill = waiting ? rgb(35, 120, 255)
-                                : working ? rgb(59, 145, 88) : rgb(45, 45, 45);
-  const uint16_t text = waiting || working ? White : rgb(190, 190, 190);
-  gfx->fillRoundRect(232, 10, 76, 22, 6, pill);
-  gfx->setTextColor(text);
+void DisplayUi::drawDebugState(AiActivity activity, int16_t idleInSeconds) {
+  char label[32] = "IDLE";
+  if (activity == AiActivity::Working) {
+    snprintf(label, sizeof(label), "WORKING");
+  } else if (activity == AiActivity::Pending) {
+    snprintf(label, sizeof(label), "PENDING");
+  } else if (activity == AiActivity::Waiting) {
+    if (idleInSeconds >= 0) {
+      snprintf(label, sizeof(label), "WAITING -> IDLE %ds", idleInSeconds);
+    } else {
+      snprintf(label, sizeof(label), "WAITING");
+    }
+  }
+
+  gfx->setTextColor(Black);
   gfx->setTextSize(1);
-  gfx->setCursor(238, 17);
-  gfx->print(waiting ? "WAITING" : working ? "WORKING" : "IDLE");
+  const int16_t textWidth = static_cast<int16_t>(strlen(label) * 6);
+  gfx->setCursor(max<int16_t>(0, (Config::DisplayWidth - textWidth) / 2), 158);
+  gfx->print(label);
+}
+
+void DisplayUi::drawUsageBlock(int16_t x, const char *label, const UsageWindow &window) {
+  gfx->setTextColor(Black);
+  gfx->setTextSize(2);
+  gfx->setCursor(x, 42);
+  gfx->print(label);
+
+  gfx->setTextSize(4);
+  gfx->setCursor(x, 70);
+  gfx->print(window.remainingPercent);
+  gfx->print("%");
+
+  gfx->setTextSize(1);
+  gfx->setCursor(x, 116);
+  gfx->print("reset ");
+  gfx->print(window.resetAt);
+
+  drawProgressBar(x, 138, 122, 12, window.remainingPercent);
 }
 
 void DisplayUi::drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h,
                                 uint8_t percent) {
-  gfx->drawRoundRect(x, y, w, h, 4, rgb(72, 72, 72));
+  gfx->drawRoundRect(x, y, w, h, 4, Black);
   const int16_t fillW = max<int16_t>(0, (w - 4) * percent / 100);
   gfx->fillRoundRect(x + 2, y + 2, fillW, h - 4, 3, percentColor(percent));
 }

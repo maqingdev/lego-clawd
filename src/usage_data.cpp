@@ -9,6 +9,7 @@ void UsageData::begin(AppState &state) {
   state.codex1w.resetAt = "Mon 09:00";
   state.aiActivity = AiActivity::Idle;
   state.aiWaitingForInput = false;
+  state.idleInSeconds = -1;
   state.lastUpdateMs = millis();
 }
 
@@ -79,6 +80,14 @@ bool UsageData::applyJsonLine(const String &line, AppState &state) {
     state.aiActivity = state.aiWaitingForInput ? AiActivity::Waiting : AiActivity::Idle;
   }
 
+  if (doc["idleIn"].is<int>()) {
+    state.idleInSeconds = constrain(doc["idleIn"].as<int>(), -1, 999);
+  } else if (doc["idleInSeconds"].is<int>()) {
+    state.idleInSeconds = constrain(doc["idleInSeconds"].as<int>(), -1, 999);
+  } else {
+    state.idleInSeconds = -1;
+  }
+
   state.lastUpdateMs = millis();
   Serial.println("usage update OK");
   return true;
@@ -107,6 +116,10 @@ AiActivity UsageData::activityFromText(const char *value, AiActivity fallback) {
   }
   if (text == "working" || text == "running" || text == "thinking") {
     return AiActivity::Working;
+  }
+  if (text == "pending" || text == "approval" || text == "waiting_approval" ||
+      text == "asking_approval") {
+    return AiActivity::Pending;
   }
   if (text == "waiting" || text == "waiting_input" || text == "waiting_approval" ||
       text == "done") {

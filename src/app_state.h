@@ -10,6 +10,7 @@ struct UsageWindow {
 enum class AiActivity : uint8_t {
   Idle,
   Working,
+  Pending,
   Waiting,
 };
 
@@ -18,11 +19,11 @@ struct AppState {
   UsageWindow codex1w;
   AiActivity aiActivity = AiActivity::Idle;
   bool aiWaitingForInput = false;
+  int16_t idleInSeconds = -1;
   uint32_t lastUpdateMs = 0;
 };
 
 enum class ScreenMode : uint8_t {
   Face = 0,
-  Codex5h = 1,
-  Codex1w = 2,
+  Usage = 1,
 };

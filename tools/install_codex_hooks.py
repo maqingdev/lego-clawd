@@ -38,7 +38,7 @@ HOOKS_TO_INSTALL = {
     "UserPromptSubmit": {"state": "working"},
     "PreToolUse": {"state": "working"},
     "PostToolUse": {"state": "working"},
-    "PermissionRequest": {"state": "waiting"},
+    "PermissionRequest": {"state": "pending", "matcher": "*"},
     "Stop": {"state": "waiting"},
 }
 
@@ -85,15 +85,36 @@ def install_hooks_config() -> None:
             raise ValueError(f"hooks.{event} must be an array")
 
         command = hook_command(spec["state"])
-        already_installed = any(
-            isinstance(group, dict)
-            and any(
-                isinstance(item, dict) and item.get("command") == command
-                for item in group.get("hooks", [])
-            )
+        event_hooks[:] = [
+            group
             for group in event_hooks
+            if not (
+                isinstance(group, dict)
+                and any(
+                    isinstance(item, dict)
+                    and isinstance(item.get("command"), str)
+                    and str(HOOK_LINK) in item.get("command")
+                    for item in group.get("hooks", [])
+                )
+            )
+        ]
+        installed_group = next(
+            (
+                group
+                for group in event_hooks
+                if isinstance(group, dict)
+                and any(
+                    isinstance(item, dict) and item.get("command") == command
+                    for item in group.get("hooks", [])
+                )
+            ),
+            None,
         )
-        if already_installed:
+        if installed_group is not None:
+            if "matcher" in spec:
+                installed_group["matcher"] = spec["matcher"]
+            else:
+                installed_group.pop("matcher", None)
             continue
 
         entry = hook_entry(spec["state"])
