@@ -1,530 +1,266 @@
 # lego-clawd
 
-A tiny LEGO-based Clawd desktop companion powered by an ESP32-S3 LCD board.
+LEGO Clawd is a small ESP32-S3 desktop companion built around a Waveshare
+ESP32-S3-LCD-1.9 board, a 1.9-inch LCD, and one LEGO-compatible servo arm. It
+shows Codex usage and agent state on the screen, while the arm gives physical
+feedback for idle, working, approval, and waiting states.
 
-The device is built around a LEGO brick Clawd shell, a Waveshare ESP32-S3-LCD-1.9 display board, and a LEGO-compatible servo arm. It will display expressive eyes, Codex usage status, and other developer-tool usage metrics, while using a side arm to provide physical feedback.
-
-## Project Goals
-
-- Build a small desktop hardware companion inspired by the Claude Code / Clawd style.
-- Display useful developer status information on a 1.9-inch LCD:
-  - Codex 5-hour usage
-  - Codex 1-week usage
-  - Other AI/software usage metrics
-  - Idle / working / warning / limit states
-  - Simple pixel-style facial expressions
-- Use a LEGO-compatible servo to move one side arm:
-  - idle pose
-  - light wave
-  - warning wave
-  - usage-limit alert
-- Keep the first version simple and reliable:
-  - no touch screen
-  - one display
-  - one servo
-  - USB-C powered during development
-  - optional external 5V servo power if needed
+Use VS Code + PlatformIO. Do not use Arduino IDE for this project.
 
 ## Hardware
 
-### LEGO Shell
+Main board:
 
-The body is based on a LEGO brick Clawd figure.
-
-Current reference build:
-
-- Orange rectangular body
-- Black rectangular eyes
-- Side protrusion for arm mounting
-- Front face area planned for 1.9-inch LCD + 3D-printed bezel
-
-The LEGO shell may be enlarged slightly to fit the display board, wiring, and servo.
-
-### Main Board
-
-Board:
-
-- Waveshare ESP32-S3-LCD-1.9
-- Variant: non-touch version
+- Waveshare ESP32-S3-LCD-1.9, non-touch variant
 - Product page: https://docs.waveshare.net/ESP32-S3-LCD-1.9/?variant=ESP32-S3-LCD-1.9
-
-Important known hardware features:
-
-- ESP32-S3R8
-- 1.9-inch LCD
-- 170 × 320 resolution
-- 16MB Flash
-- 8MB PSRAM
-- USB Type-C for power, upload, and serial debugging
-- 3.7V lithium battery connector
-- Micro SD slot
+- USB-C for upload, serial, and board power
+- 170 x 320 LCD
 - QMI8658 IMU
-- WS2812 RGB LED on the back side for the non-touch version
+- Micro SD slot
+- WS2812 RGB LED on the back side
 - Pico-compatible GPIO header
-
-### Display
-
-The display will be used in landscape orientation.
-
-Primary screens:
-
-1. Face / idle screen
-2. Codex 5-hour usage screen
-3. Codex 1-week usage screen
-4. Other software usage screen
-5. Warning / limit screen
-
-Visual direction:
-
-- black background
-- high-contrast text
-- simple pixel face
-- green / yellow / red status indicators
-- large percentage number or progress ring
-- small status text
-
-### Servo
 
 Servo:
 
-- LEGO-compatible servo
-- Model: AP3009-06 / JM 9g servo
-- Voltage: 6V nominal
-- Signal: 3-wire servo control
-- Angle: 270° / 120° version, depending on purchased unit
-- Intended use: one side arm movement
+- LEGO-compatible AP3009-06 / JM 9g style servo
+- 3-wire servo control
+- Current signal pin: `GPIO18`
+- Current wiring:
 
-Mechanical design note:
+```text
+ESP32 GPIO18 -> servo signal
+5V supply +   -> servo red wire
+5V supply -   -> servo brown wire
+ESP32 GND     -> same 5V supply - / common ground
+```
 
-The servo output shaft is perpendicular to the side face of the LEGO body. Therefore the arm rotates within the side-plane of the body, like a small wing, side pointer, or side flipper. It is not a forward-facing waving arm.
+All grounds must be common. Do not power the servo from ESP32 `3V3`.
 
-Recommended first arm design:
+Power note from bring-up: a USB-A to USB-C cable caused unreliable servo power.
+A USB-C to USB-C cable is currently stable for board upload/reset and servo
+power.
 
-- short block-style side arm
-- length: 20-30mm
-- width: 6-10mm
-- thickness: 6-8mm
-- movement range: roughly -60° to +60° around the neutral position
-- use a small 3D-printed or LEGO-compatible adapter on the white cross axle
+Avoid these GPIOs for the servo signal:
 
-Servo wiring/debug notes:
+- `GPIO47` / `GPIO48`: shared with the IMU I2C bus
+- `GPIO19` / `GPIO20`: USB pins
+- `GPIO39`: SD card interface, only use intentionally if SD is unused
+- `GPIO9`-`GPIO14`: LCD pins
+- `GPIO0`, `GPIO45`, `GPIO46`: boot/strapping related
 
-- Current servo signal GPIO: `GPIO18`.
-- Current calibrated pulse landmarks with the arm mounted in the LEGO shell:
-  `1000us` is vertical up, `1675us` is straight forward, and `2300us` is
-  vertical down.
-- Current state mapping:
-  `idle` uses `2200us` for a down/slightly-forward resting pose, `working`
-  slowly sweeps around the forward pose from `1600us` to `1750us`, and
-  `pending`/`waiting` use `1000us` for the raised-hand pose.
-- When `waiting` changes back to `idle`, the arm lowers back to the resting
-  pose.
-- `GPIO47`/`GPIO48` are shared with the IMU I2C bus, and `GPIO19`/`GPIO20`
-  are USB pins. Avoid those for the servo signal.
-- `GPIO39` is routed to the SD card interface. It is not preferred unless the
-  SD card is unused and the physical pin location is intentional.
-- The servo brown wire, the ESP32 `GND`, and the external USB 5V supply `-`
-  terminal must all be connected together as one common ground.
-- A bad USB-A to USB-C power cable caused unreliable servo power during
-  bring-up. A USB-C to USB-C cable is currently stable for board upload/reset
-  and servo power.
-- The normal firmware drives the servo with explicit pulse widths rather than
-  degree angles. Tune these values in `include/config.h`:
-  `ServoDownPulseUs`, `ServoWorkMinPulseUs`, `ServoWorkMaxPulseUs`, and
-  `ServoRaisedPulseUs`.
-- The firmware accepts `servoPulseUs` in the serial JSON payload for manual
-  calibration; when present, the LCD footer shows the current pulse width.
-- The firmware accepts `selfTest: true` in the serial JSON payload to run a
-  fixed end-to-end demo: `idle`, `working`, `pending`, `waiting`, usage screen,
-  then back to `idle`.
-- A minimal GPIO18 servo test is available with:
+## Firmware Layout
+
+- `src/main.cpp`: firmware entry, screen schedule, face animation, self-test
+- `include/config.h`: hardware pins and timing constants
+- `src/display_ui.*`: LCD rendering
+- `src/usage_data.*`: serial JSON parsing
+- `src/servo_arm.*`: servo movement
+- `src/app_state.h`: shared app state
+- `tools/codexbar_bridge.py`: host bridge from CodexBar usage JSON to serial
+- `tools/run-bridge.sh`: wrapper that finds the serial port and runs the bridge
+- `tools/codex_status_hook.py`: Codex hook state writer
+- `tools/install_codex_hooks.py`: installs Codex hook config
+
+## Servo Calibration
+
+The firmware drives the servo with explicit pulse widths instead of degree
+angles. Tune these values in `include/config.h`.
+
+Current calibrated landmarks with the arm mounted in the LEGO shell:
+
+```text
+1000us = vertical up
+1675us = straight forward
+2300us = vertical down
+```
+
+Current state mapping:
+
+```text
+idle      -> 2200us resting pose, down and slightly forward
+working   -> slow sweep from 1600us to 1750us around the forward pose
+pending   -> 1000us raised hand
+waiting   -> 1000us raised hand
+waiting -> idle lowers the arm back to 2200us
+```
+
+Manual calibration over serial:
+
+```json
+{"servoPulseUs":1675}
+```
+
+When `servoPulseUs` is present, the LCD footer shows the current pulse width.
+The firmware constrains calibration pulses to `500us` through `2500us`.
+
+Minimal servo-only test firmware:
 
 ```sh
 ~/.platformio/penv/bin/pio run -e servo_gpio18_test -t upload --upload-port /dev/cu.usbmodem101
 ```
 
 The test firmware does not initialize the LCD, so the screen is expected to be
-black while it continuously cycles the servo pulse width.
+black while it continuously cycles servo pulse widths.
 
-Run the normal firmware self-test with:
+## Runtime Serial Protocol
 
-```sh
-./tools/run-bridge.sh --once --self-test
-```
-
-The self-test usage screen shows the latest usage payload sent to the firmware.
-Using the bridge command above reads the CodexBar usage JSON first, then sends
-that usage data together with `selfTest: true`. Sending raw `{"selfTest":true}`
-over serial only reuses whatever usage values are already cached on the device.
-
-## Power
-
-During development:
-
-- ESP32-S3 board: USB-C from computer or USB charger
-- Servo: external 5V-6V power supply is recommended
-- ESP32 GND and servo power GND must be connected together
-
-For a very light single-servo test, the servo may be powered from the board's 5V pin if the USB power source is strong enough, but if the board resets, the screen flickers, or the servo jitters, use an external servo power supply.
-
-Never power the servo from the ESP32 3.3V pin.
-
-## Development Environment
-
-Use:
-
-- VS Code
-- PlatformIO extension
-- Arduino framework inside PlatformIO
-
-Do not require Arduino IDE.
-
-The first version should prioritize a simple PlatformIO + Arduino framework project. ESP-IDF may be considered later if the project needs more advanced display performance, lower-level power control, or more complex multitasking.
-
-## Suggested Project Structure
-
-```text
-lego-clawd/
-├─ platformio.ini
-├─ README.md
-├─ src/
-│  ├─ main.cpp
-│  ├─ app_state.h
-│  ├─ display_ui.cpp
-│  ├─ display_ui.h
-│  ├─ servo_arm.cpp
-│  ├─ servo_arm.h
-│  ├─ usage_data.cpp
-│  ├─ usage_data.h
-│  ├─ wifi_manager.cpp
-│  └─ wifi_manager.h
-├─ include/
-│  └─ config.h
-├─ data/
-│  ├─ sample_usage.json
-│  └─ assets/
-└─ docs/
-   ├─ hardware.md
-   ├─ wiring.md
-   └─ ui.md
-```
-
-## PlatformIO Setup
-
-Initial `platformio.ini` target:
-
-```ini
-[env:waveshare_esp32_s3_lcd_1_9]
-platform = espressif32
-board = esp32-s3-devkitc-1
-framework = arduino
-
-monitor_speed = 115200
-upload_speed = 921600
-
-board_build.flash_mode = qio
-board_build.arduino.memory_type = qio_opi
-board_build.psram_type = opi
-board_build.partitions = huge_app.csv
-
-lib_deps =
-  madhephaestus/ESP32Servo
-  bblanchon/ArduinoJson
-```
-
-The LCD driver should be added after the official Waveshare display demo is validated. Prefer starting from the Waveshare example code for the ESP32-S3-LCD-1.9 and then migrating the display initialization into this PlatformIO project.
-
-## First Milestones
-
-### Milestone 1: Boot Test
-
-Goal:
-
-- compile and upload from PlatformIO
-- serial monitor works
-- board prints boot messages every second
-
-Expected output:
-
-```text
-Lego Clawd boot OK
-```
-
-### Milestone 2: Servo Test
-
-Goal:
-
-- control the side servo with ESP32Servo
-- move between three safe angles
-- confirm power is stable
-
-Suggested test sequence:
-
-- 90°
-- 40°
-- 120°
-- 90°
-
-### Milestone 3: LCD Test
-
-Goal:
-
-- run the Waveshare LCD initialization
-- display a simple black screen with white text:
-
-```text
-lego-clawd
-LCD OK
-```
-
-### Milestone 4: Basic UI
-
-Goal:
-
-Create three display modes:
-
-1. Face mode
-2. Codex 5h usage mode
-3. Codex 1w usage mode
-
-Use sample/mock data first.
-
-## Runtime Status Input
-
-The firmware accepts one JSON object per line over USB serial. This keeps the
-ESP32 firmware independent from the host-side tool that collects real Codex
-usage and agent state.
+The firmware accepts one JSON object per line over USB serial.
 
 Example:
 
 ```json
-{"codex5h":76,"codex1w":58,"reset5h":"18:30","reset1w":"Mon 09:00","aiState":"working","waiting":false}
+{"codex5h":89,"codex1w":91,"reset5h":"Jun 14 02:17","reset1w":"Jun 18 10:43","aiState":"working"}
 ```
 
 Supported keys:
 
 - `codex5h` or `fiveHourRemainingPct`: remaining 5-hour quota percent
 - `codex1w` or `oneWeekRemainingPct`: remaining 1-week quota percent
-- `reset5h` or `fiveHourResetAt`: display text for the 5-hour reset time
-- `reset1w` or `oneWeekResetAt`: display text for the 1-week reset time
-- `aiState` or `state`: `idle`, `working`, or `waiting`
-- `waiting` or `aiWaitingForInput`: legacy boolean; when `true`, the servo arm raises
+- `reset5h` or `fiveHourResetAt`: display text for 5-hour reset
+- `reset1w` or `oneWeekResetAt`: display text for 1-week reset
+- `aiState` or `state`: `idle`, `working`, `pending`, or `waiting`
+- `waiting` or `aiWaitingForInput`: legacy boolean; `true` maps to `waiting`
+- `servoPulseUs`: manual servo calibration override
+- `selfTest`: when `true`, runs the end-to-end firmware self-test
 
-Without serial input, the firmware displays built-in mock usage data.
+Activity behavior:
 
-### CodexBar Bridge
+| State | Screen behavior | Servo behavior |
+|---|---|---|
+| `idle` | face animations and occasional usage peeks | resting pose |
+| `working` | focused eyes, low-frequency blink, brow animation | slow front sweep |
+| `pending` | wide eyes for approval request | raised hand |
+| `waiting` | complete and waiting for user input | raised hand, then usage peek |
 
-Codex usage can be read from the CodexBar JSON file generated by Scriptable:
+The usage screen is firmware-timed. The bridge only updates cached usage data
+over serial.
+
+## Host Bridge
+
+Run the bridge from the repo root:
+
+```sh
+./tools/run-bridge.sh
+```
+
+The bridge reads CodexBar usage from:
 
 ```text
 ~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json
 ```
 
-Run the host bridge while the ESP32 is connected over USB:
+It maps the `codex` provider:
+
+- `primary.leftPercent` -> `codex5h`
+- `secondary.leftPercent` -> `codex1w`
+- `primary.resetsAt` -> `reset5h`
+- `secondary.resetsAt` -> `reset1w`
+
+The bridge reads AI state from:
+
+```text
+~/.lego-clawd/ai-status.json
+```
+
+If the status file is stale for more than 60 seconds, the bridge falls back to
+`idle`. Use `--idle-timeout 0` to disable that fallback.
+
+Useful bridge checks:
 
 ```sh
-~/.platformio/penv/bin/python tools/codexbar_bridge.py --port /dev/cu.usbmodem101
+./tools/run-bridge.sh --dry-run --once
+./tools/run-bridge.sh --once --self-test
 ```
 
-The bridge reads the `codex` provider and maps:
+`--self-test` reads the latest CodexBar usage first, then sends that usage data
+together with `selfTest: true`. Sending raw `{"selfTest":true}` over serial only
+reuses whatever usage values are already cached on the device.
 
-- `primary.leftPercent` to `codex5h`
-- `secondary.leftPercent` to `codex1w`
-- `primary.resetsAt` to `reset5h`
-- `secondary.resetsAt` to `reset1w`
+## Firmware Self-Test
 
-To inspect the converted payload without serial:
+Run:
 
 ```sh
-~/.platformio/penv/bin/python tools/codexbar_bridge.py --dry-run --once
+./tools/run-bridge.sh --once --self-test
 ```
 
-To force the arm raised while testing:
+Sequence:
+
+```text
+idle -> working -> pending -> waiting -> usage screen -> idle
+```
+
+Expected serial log:
+
+```text
+self-test start
+self-test step 1/6
+self-test step 2/6
+self-test step 3/6
+self-test step 4/6
+self-test step 5/6
+self-test step 6/6
+self-test complete
+```
+
+## Codex Hooks
+
+Install hooks with:
 
 ```sh
-~/.platformio/penv/bin/python tools/codexbar_bridge.py --waiting true
+python3 tools/install_codex_hooks.py
 ```
 
-### AI Activity States
+Hook script:
 
-The firmware intentionally uses only three AI activity states:
-
-| State | LCD pill | Servo behavior |
-|---|---|---|
-| `idle` | IDLE | arm down |
-| `working` | WORKING | small back-and-forth motion |
-| `waiting` | WAITING | arm raised |
-
-The bridge reads `~/.lego-clawd/ai-status.json` by default. A Codex hook can
-write that file whenever the agent state changes:
-
-```json
-{"state":"working","waiting":false,"updatedAt":"2026-06-11T10:30:00+08:00"}
+```text
+tools/codex_status_hook.py
 ```
 
-If the status file is stale for more than 1 minute, the bridge falls back to
-`idle` so the arm returns down during long idle periods. Override with
-`--idle-timeout SECONDS`; use `--idle-timeout 0` to disable the fallback.
+Important mapping:
 
-During normal use:
+- `UserPromptSubmit`, `PreToolUse`, `PostToolUse` -> `working`
+- `PermissionRequest` -> `pending`
+- `Stop` -> `waiting`
 
-1. Connect the ESP32 over USB.
-2. Find the serial port if needed:
+`PermissionRequest` must map to `pending`, not `waiting`.
 
-   ```sh
-   pio device list
-   ```
+## Common Commands
 
-3. Start the bridge:
+Build:
 
-   ```sh
-   tools/start_bridge.sh
-   ```
-
-   To override the port:
-
-   ```sh
-   LEGO_CLAWD_PORT=/dev/cu.usbmodem101 tools/start_bridge.sh
-   ```
-
-The bridge rereads `codexbar-usage.json` before every serial update. The default
-bridge interval is 5 seconds, so with CodexBar refreshing the JSON every minute,
-Lego Clawd should receive the latest exported usage within a few seconds of the
-file update.
-
-Suggested global `~/.codex/hooks.json` mapping:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/.codex/hooks/codex_status_hook.py working"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/.codex/hooks/codex_status_hook.py working"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/.codex/hooks/codex_status_hook.py working"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/.codex/hooks/codex_status_hook.py waiting"
-          }
-        ]
-      }
-    ]
-  }
-}
+```sh
+~/.platformio/penv/bin/pio run
 ```
 
-Copy `tools/codex_status_hook.py` to `~/.codex/hooks/codex_status_hook.py` and
-trust the hook from Codex settings or `/hooks`.
+Upload normal firmware:
 
-### Milestone 5: Usage Data Integration
-
-Goal:
-
-- read usage data from local sample JSON first
-- later replace with real Codex usage source
-- update screen periodically
-- trigger servo movement based on usage thresholds
-
-## Servo Behavior Mapping
-
-Initial behavior proposal:
-
-| State | Screen | Arm Behavior |
-|---|---|---|
-| Idle | pixel face | arm rests near neutral |
-| Working | Codex usage screen | slight movement every few minutes |
-| Usage 60-80% | yellow status | one slow wave |
-| Usage >80% | warning status | two quick waves |
-| Usage >95% | limit warning | arm stays raised / repeated alert |
-| Refresh success | happy face | small flap |
-| Error | sad face | short shake |
-
-## UI Data Model
-
-Initial mock usage JSON:
-
-```json
-{
-  "codex": {
-    "five_hour": {
-      "used": 12480,
-      "limit": 18000,
-      "percent": 68,
-      "reset_in_minutes": 132
-    },
-    "weekly": {
-      "used": 42000,
-      "limit": 100000,
-      "percent": 42
-    }
-  },
-  "status": {
-    "wifi": true,
-    "last_updated": "10:30",
-    "mode": "running"
-  }
-}
+```sh
+~/.platformio/penv/bin/pio run -t upload --upload-port /dev/cu.usbmodem101
 ```
 
-## Codex Development Instructions
+Upload servo-only test firmware:
 
-When using Codex to implement this project, work in small hardware-validation steps:
+```sh
+~/.platformio/penv/bin/pio run -e servo_gpio18_test -t upload --upload-port /dev/cu.usbmodem101
+```
 
-1. Create minimal PlatformIO project.
-2. Verify serial output.
-3. Add servo test only.
-4. Add LCD test only.
-5. Add simple UI with mock data.
-6. Add usage data parsing.
-7. Add Wi-Fi / data source integration.
-8. Add arm behavior mapping.
-9. Refactor modules only after the hardware works.
+Find devices:
 
-Avoid implementing LCD, Wi-Fi, API, servo, OTA, and UI all in one step.
+```sh
+pio device list
+```
 
-## Safety Notes
+Check whether another process owns the serial port:
 
-- Do not connect servo power to 3.3V.
-- Use external 5V-6V power for servo if movement causes reset or flicker.
-- Always connect servo power GND to ESP32 GND.
-- Keep servo motion range conservative until the mechanical arm is tested.
-- Avoid forcing the LEGO arm if the servo stalls.
-- If the servo jitters, check power first before changing code.
+```sh
+lsof /dev/cu.usbmodem101
+```
 
-## Current Status
+## Development Notes
 
-Repository created.
-
-Next task:
-
-- initialize VS Code + PlatformIO project
-- add minimal boot test
-- then add servo test
+- Work in small hardware-validation steps.
+- Keep servo motion conservative until the mechanical arm is tested.
+- If the board resets, LCD flickers, or servo jitters, check power and common
+  ground before changing code.
+- Avoid unrelated refactors while hardware behavior is still being tuned.
