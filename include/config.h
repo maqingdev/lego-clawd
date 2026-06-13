@@ -18,6 +18,7 @@ constexpr int DisplayWidth = 320;
 constexpr int DisplayHeight = 170;
 constexpr uint32_t UsagePeekIntervalMs = 30000;
 constexpr uint32_t UsagePeekDurationMs = 5000;
+constexpr uint32_t WaitingUsagePeekDelayMs = 5000;
 constexpr uint32_t EyeExpressionIntervalMinMs = 6500;
 constexpr uint32_t EyeExpressionIntervalMaxMs = 12000;
 constexpr uint32_t WorkingBlinkIntervalMinMs = 12000;

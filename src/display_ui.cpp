@@ -40,12 +40,11 @@ bool DisplayUi::begin() {
   return true;
 }
 
-void DisplayUi::renderFace(EyeExpression expression, AiActivity activity,
-                           int16_t idleInSeconds) {
-  if (activity == AiActivity::Working && expression != EyeExpression::Blink &&
+void DisplayUi::renderFace(EyeExpression expression, const AppState &state) {
+  if (state.aiActivity == AiActivity::Working && expression != EyeExpression::Blink &&
       expression != EyeExpression::Strain) {
     expression = EyeExpression::Focused;
-  } else if (activity == AiActivity::Pending && expression != EyeExpression::Blink) {
+  } else if (state.aiActivity == AiActivity::Pending && expression != EyeExpression::Blink) {
     expression = EyeExpression::Wide;
   }
 
@@ -53,7 +52,10 @@ void DisplayUi::renderFace(EyeExpression expression, AiActivity activity,
 
   drawEye(24, 52, 64, 58, expression, true);
   drawEye(232, 52, 64, 58, expression, false);
-  drawDebugState(activity, idleInSeconds);
+  if (expression == EyeExpression::Doze) {
+    drawDozeMarks();
+  }
+  drawFooter(state);
 }
 
 void DisplayUi::renderWorkingBrows(EyeExpression expression) {
@@ -102,6 +104,9 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
   if (expression == EyeExpression::Sleepy) {
     eyeH = 24;
     eyeY = y + 18;
+  } else if (expression == EyeExpression::Doze) {
+    eyeH = 12;
+    eyeY = y + 28;
   } else if (expression == EyeExpression::Focused) {
     eyeH = 34;
     eyeY = y + 18;
@@ -148,6 +153,41 @@ void DisplayUi::drawWorkingBrow(int16_t x, int16_t y, int16_t w,
       gfx->drawLine(x, y1, x + w, y2, Black);
     }
   }
+}
+
+void DisplayUi::drawDozeMarks() {
+  gfx->setTextColor(Black);
+  gfx->setTextSize(1);
+  gfx->setCursor(150, 24);
+  gfx->print("z");
+  gfx->setTextSize(2);
+  gfx->setCursor(166, 12);
+  gfx->print("Z");
+}
+
+void DisplayUi::drawFooter(const AppState &state) {
+  char label[40] = "IDLE";
+  if (state.aiActivity == AiActivity::Working) {
+    snprintf(label, sizeof(label), "WORKING");
+  } else if (state.aiActivity == AiActivity::Pending) {
+    snprintf(label, sizeof(label), "PENDING");
+  } else if (state.aiActivity == AiActivity::Waiting) {
+    if (state.idleInSeconds >= 0) {
+      snprintf(label, sizeof(label), "WAITING -> IDLE %ds", state.idleInSeconds);
+    } else {
+      snprintf(label, sizeof(label), "WAITING");
+    }
+  }
+
+  char footer[56];
+  snprintf(footer, sizeof(footer), "%u%% | %s", state.codex5h.remainingPercent, label);
+
+  gfx->fillRect(0, 150, Config::DisplayWidth, 20, faceBackground());
+  gfx->setTextColor(Black);
+  gfx->setTextSize(1);
+  const int16_t textWidth = static_cast<int16_t>(strlen(footer) * 6);
+  gfx->setCursor(max<int16_t>(0, (Config::DisplayWidth - textWidth) / 2), 158);
+  gfx->print(footer);
 }
 
 void DisplayUi::drawDebugState(AiActivity activity, int16_t idleInSeconds) {

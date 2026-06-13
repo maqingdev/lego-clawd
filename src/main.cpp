@@ -19,12 +19,13 @@ uint32_t lastScreenSwitchMs = 0;
 uint32_t nextEyeChangeMs = 0;
 uint32_t blinkUntilMs = 0;
 uint32_t usagePeekStartedMs = 0;
+uint32_t waitingUsagePeekAtMs = 0;
 uint32_t nextWorkingBlinkMs = 0;
 uint32_t nextWorkingStrainMs = 0;
 bool workingStrained = false;
 
 EyeExpression randomEyeExpression() {
-  switch (random(0, 5)) {
+  switch (random(0, 7)) {
     case 0:
       return EyeExpression::Neutral;
     case 1:
@@ -33,6 +34,8 @@ EyeExpression randomEyeExpression() {
       return EyeExpression::Sleepy;
     case 3:
       return EyeExpression::LookLeft;
+    case 4:
+      return EyeExpression::Doze;
     default:
       return EyeExpression::LookRight;
   }
@@ -55,7 +58,7 @@ void scheduleWorkingStrain(uint32_t now) {
 void renderCurrentScreen() {
   switch (screen) {
     case ScreenMode::Face:
-      display.renderFace(eyeExpression, state.aiActivity, state.idleInSeconds);
+      display.renderFace(eyeExpression, state);
       break;
     case ScreenMode::Usage:
       display.renderUsageSummary(state.codex5h, state.codex1w, state.aiActivity,
@@ -66,6 +69,27 @@ void renderCurrentScreen() {
 
 void updateScreenSchedule(uint32_t now) {
   if (state.aiActivity != AiActivity::Idle) {
+    if (state.aiActivity == AiActivity::Waiting) {
+      if (screen == ScreenMode::Usage) {
+        if (now - usagePeekStartedMs >= Config::UsagePeekDurationMs) {
+          screen = ScreenMode::Face;
+          renderCurrentScreen();
+        }
+        return;
+      }
+
+      if (waitingUsagePeekAtMs > 0 &&
+          static_cast<int32_t>(now - waitingUsagePeekAtMs) >= 0) {
+        waitingUsagePeekAtMs = 0;
+        screen = ScreenMode::Usage;
+        usagePeekStartedMs = now;
+        renderCurrentScreen();
+        return;
+      }
+    } else {
+      waitingUsagePeekAtMs = 0;
+    }
+
     if (screen != ScreenMode::Face) {
       screen = ScreenMode::Face;
       renderCurrentScreen();
@@ -187,8 +211,14 @@ void setup() {
 
 void loop() {
   const uint32_t now = millis();
+  const AiActivity previousActivity = state.aiActivity;
 
   if (usageData.readSerialUpdate(Serial, state)) {
+    if (previousActivity == AiActivity::Working && state.aiActivity == AiActivity::Waiting) {
+      waitingUsagePeekAtMs = now + Config::WaitingUsagePeekDelayMs;
+    } else if (state.aiActivity != AiActivity::Waiting) {
+      waitingUsagePeekAtMs = 0;
+    }
     servoArm.setActivity(state.aiActivity);
     forceFaceScreen();
   }
