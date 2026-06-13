@@ -95,8 +95,8 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
     eyeH = 34;
     eyeY = y + 18;
   } else if (expression == EyeExpression::Strain) {
-    eyeH = 26;
-    eyeY = y + 23;
+    eyeH = 34;
+    eyeY = y + 18;
   } else if (expression == EyeExpression::Wide) {
     eyeH = 70;
     eyeY = y - 6;
