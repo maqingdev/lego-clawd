@@ -19,7 +19,9 @@ struct AppState {
   UsageWindow codex1w;
   AiActivity aiActivity = AiActivity::Idle;
   bool aiWaitingForInput = false;
+  bool selfTestRequested = false;
   int16_t idleInSeconds = -1;
+  int16_t servoPulseUs = -1;
   uint32_t lastUpdateMs = 0;
 };
 

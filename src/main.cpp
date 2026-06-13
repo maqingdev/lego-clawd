@@ -23,6 +23,27 @@ uint32_t waitingUsagePeekAtMs = 0;
 uint32_t nextWorkingBlinkMs = 0;
 uint32_t nextWorkingStrainMs = 0;
 bool workingStrained = false;
+bool selfTestActive = false;
+uint8_t selfTestStep = 0;
+uint32_t selfTestStepStartedMs = 0;
+
+struct SelfTestStep {
+  AiActivity activity;
+  ScreenMode screenMode;
+  EyeExpression expression;
+  uint32_t durationMs;
+};
+
+constexpr SelfTestStep SelfTestSteps[] = {
+    {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 3000},
+    {AiActivity::Working, ScreenMode::Face, EyeExpression::Focused, 10000},
+    {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 5000},
+    {AiActivity::Waiting, ScreenMode::Face, EyeExpression::Neutral, 5000},
+    {AiActivity::Waiting, ScreenMode::Usage, EyeExpression::Neutral, 5000},
+    {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 4000},
+};
+
+constexpr uint8_t SelfTestStepCount = sizeof(SelfTestSteps) / sizeof(SelfTestSteps[0]);
 
 EyeExpression randomEyeExpression() {
   switch (random(0, 7)) {
@@ -68,6 +89,18 @@ void renderCurrentScreen() {
 }
 
 void updateScreenSchedule(uint32_t now) {
+  if (selfTestActive) {
+    return;
+  }
+
+  if (state.servoPulseUs >= 0) {
+    if (screen != ScreenMode::Face) {
+      screen = ScreenMode::Face;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
   if (state.aiActivity != AiActivity::Idle) {
     if (state.aiActivity == AiActivity::Waiting) {
       if (screen == ScreenMode::Usage) {
@@ -183,10 +216,66 @@ void updateFaceExpression(uint32_t now) {
 }
 
 void forceFaceScreen() {
-  if (state.aiActivity != AiActivity::Idle) {
+  if (state.aiActivity != AiActivity::Idle || state.servoPulseUs >= 0) {
     screen = ScreenMode::Face;
   }
   renderCurrentScreen();
+}
+
+void applySelfTestStep() {
+  const SelfTestStep &step = SelfTestSteps[selfTestStep];
+  state.aiActivity = step.activity;
+  state.aiWaitingForInput = step.activity == AiActivity::Waiting;
+  state.servoPulseUs = -1;
+  screen = step.screenMode;
+  eyeExpression = step.expression;
+  blinkUntilMs = 0;
+  servoArm.setActivity(state.aiActivity);
+  renderCurrentScreen();
+  Serial.print("self-test step ");
+  Serial.print(selfTestStep + 1);
+  Serial.print("/");
+  Serial.println(SelfTestStepCount);
+}
+
+void startSelfTest(uint32_t now) {
+  selfTestActive = true;
+  selfTestStep = 0;
+  selfTestStepStartedMs = now;
+  waitingUsagePeekAtMs = 0;
+  usagePeekStartedMs = 0;
+  Serial.println("self-test start");
+  applySelfTestStep();
+}
+
+void updateSelfTest(uint32_t now) {
+  if (!selfTestActive) {
+    return;
+  }
+
+  if (now - selfTestStepStartedMs < SelfTestSteps[selfTestStep].durationMs) {
+    return;
+  }
+
+  ++selfTestStep;
+  if (selfTestStep >= SelfTestStepCount) {
+    selfTestActive = false;
+    selfTestStep = 0;
+    state.aiActivity = AiActivity::Idle;
+    state.aiWaitingForInput = false;
+    state.servoPulseUs = -1;
+    screen = ScreenMode::Face;
+    eyeExpression = EyeExpression::Neutral;
+    servoArm.setActivity(state.aiActivity);
+    renderCurrentScreen();
+    lastScreenSwitchMs = now;
+    scheduleEyeChange();
+    Serial.println("self-test complete");
+    return;
+  }
+
+  selfTestStepStartedMs = now;
+  applySelfTestStep();
 }
 
 }
@@ -214,15 +303,25 @@ void loop() {
   const AiActivity previousActivity = state.aiActivity;
 
   if (usageData.readSerialUpdate(Serial, state)) {
+    if (state.selfTestRequested) {
+      state.selfTestRequested = false;
+      startSelfTest(now);
+    } else {
     if (previousActivity == AiActivity::Working && state.aiActivity == AiActivity::Waiting) {
       waitingUsagePeekAtMs = now + Config::WaitingUsagePeekDelayMs;
     } else if (state.aiActivity != AiActivity::Waiting) {
       waitingUsagePeekAtMs = 0;
     }
-    servoArm.setActivity(state.aiActivity);
+    if (state.servoPulseUs >= 0) {
+      servoArm.setCalibrationPulse(state.servoPulseUs);
+    } else {
+      servoArm.setActivity(state.aiActivity);
+    }
     forceFaceScreen();
+    }
   }
 
+  updateSelfTest(now);
   updateScreenSchedule(now);
   updateFaceExpression(now);
 

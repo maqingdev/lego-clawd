@@ -29,12 +29,12 @@ constexpr uint32_t BlinkMs = 120;
 constexpr int ServoSignalPin = 18;
 constexpr int ServoMinPulseUs = 500;
 constexpr int ServoMaxPulseUs = 2500;
-constexpr int ServoDownPulseUs = 700;
-constexpr int ServoWorkMinPulseUs = 1300;
-constexpr int ServoWorkMaxPulseUs = 1700;
-constexpr int ServoRaisedPulseUs = 2300;
-constexpr int ServoStepPulseUs = 20;
-constexpr uint32_t ServoStepMs = 20;
-constexpr uint32_t ServoWorkPauseMs = 350;
+constexpr int ServoDownPulseUs = 2200;
+constexpr int ServoWorkMinPulseUs = 1600;
+constexpr int ServoWorkMaxPulseUs = 1750;
+constexpr int ServoRaisedPulseUs = 1000;
+constexpr int ServoStepPulseUs = 10;
+constexpr uint32_t ServoStepMs = 25;
+constexpr uint32_t ServoWorkPauseMs = 1500;
 
 }

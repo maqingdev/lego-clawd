@@ -110,20 +110,33 @@ Recommended first arm design:
 Servo wiring/debug notes:
 
 - Current servo signal GPIO: `GPIO18`.
+- Current calibrated pulse landmarks with the arm mounted in the LEGO shell:
+  `1000us` is vertical up, `1675us` is straight forward, and `2300us` is
+  vertical down.
+- Current state mapping:
+  `idle` uses `2200us` for a down/slightly-forward resting pose, `working`
+  slowly sweeps around the forward pose from `1600us` to `1750us`, and
+  `pending`/`waiting` use `1000us` for the raised-hand pose.
+- When `waiting` changes back to `idle`, the arm lowers back to the resting
+  pose.
 - `GPIO47`/`GPIO48` are shared with the IMU I2C bus, and `GPIO19`/`GPIO20`
   are USB pins. Avoid those for the servo signal.
 - `GPIO39` is routed to the SD card interface. It is not preferred unless the
   SD card is unused and the physical pin location is intentional.
 - The servo brown wire, the ESP32 `GND`, and the external USB 5V supply `-`
   terminal must all be connected together as one common ground.
-- During bring-up, disconnect the servo 5V line before uploading firmware.
-  After upload/reset completes and the LCD is running, reconnect the servo 5V
-  line. This avoids the servo starting in a bad state while the ESP32 USB
-  serial/JTAG resets GPIO output.
+- A bad USB-A to USB-C power cable caused unreliable servo power during
+  bring-up. A USB-C to USB-C cable is currently stable for board upload/reset
+  and servo power.
 - The normal firmware drives the servo with explicit pulse widths rather than
   degree angles. Tune these values in `include/config.h`:
   `ServoDownPulseUs`, `ServoWorkMinPulseUs`, `ServoWorkMaxPulseUs`, and
   `ServoRaisedPulseUs`.
+- The firmware accepts `servoPulseUs` in the serial JSON payload for manual
+  calibration; when present, the LCD footer shows the current pulse width.
+- The firmware accepts `selfTest: true` in the serial JSON payload to run a
+  fixed end-to-end demo: `idle`, `working`, `pending`, `waiting`, usage screen,
+  then back to `idle`.
 - A minimal GPIO18 servo test is available with:
 
 ```sh
@@ -132,6 +145,17 @@ Servo wiring/debug notes:
 
 The test firmware does not initialize the LCD, so the screen is expected to be
 black while it continuously cycles the servo pulse width.
+
+Run the normal firmware self-test with:
+
+```sh
+./tools/run-bridge.sh --once --self-test
+```
+
+The self-test usage screen shows the latest usage payload sent to the firmware.
+Using the bridge command above reads the CodexBar usage JSON first, then sends
+that usage data together with `selfTest: true`. Sending raw `{"selfTest":true}`
+over serial only reuses whatever usage values are already cached on the device.
 
 ## Power
 

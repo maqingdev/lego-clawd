@@ -7,6 +7,7 @@ class ServoArm {
  public:
   void begin();
   void setActivity(AiActivity activity);
+  void setCalibrationPulse(int pulseUs);
   void setWaitingForInput(bool waiting);
   void update();
   bool attached() const { return attached_; }

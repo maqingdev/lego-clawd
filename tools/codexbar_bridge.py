@@ -43,6 +43,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--once", action="store_true", help="Send/read once and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Print JSON without serial.")
     parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Include selfTest=true so the firmware runs its end-to-end demo.",
+    )
+    parser.add_argument(
         "--idle-timeout",
         type=float,
         default=60.0,
@@ -225,7 +230,10 @@ def build_status_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
-    return {**build_usage_payload(args), **build_status_payload(args)}
+    payload = {**build_usage_payload(args), **build_status_payload(args)}
+    if args.self_test:
+        payload["selfTest"] = True
+    return payload
 
 
 def find_serial_port() -> str:
@@ -302,6 +310,8 @@ def main() -> int:
 
             assert usage_payload is not None
             payload = {**usage_payload, **build_status_payload(args)}
+            if args.self_test:
+                payload["selfTest"] = True
 
             if args.once or payload != last_sent_payload:
                 send_payload(payload)

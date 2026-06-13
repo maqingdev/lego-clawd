@@ -167,7 +167,9 @@ void DisplayUi::drawDozeMarks() {
 
 void DisplayUi::drawFooter(const AppState &state) {
   char label[40] = "IDLE";
-  if (state.aiActivity == AiActivity::Working) {
+  if (state.servoPulseUs >= 0) {
+    snprintf(label, sizeof(label), "SERVO %dus", state.servoPulseUs);
+  } else if (state.aiActivity == AiActivity::Working) {
     snprintf(label, sizeof(label), "WORKING");
   } else if (state.aiActivity == AiActivity::Pending) {
     snprintf(label, sizeof(label), "PENDING");

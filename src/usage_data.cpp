@@ -9,6 +9,7 @@ void UsageData::begin(AppState &state) {
   state.codex1w.resetAt = "Mon 09:00";
   state.aiActivity = AiActivity::Idle;
   state.aiWaitingForInput = false;
+  state.selfTestRequested = false;
   state.idleInSeconds = -1;
   state.lastUpdateMs = millis();
 }
@@ -86,6 +87,17 @@ bool UsageData::applyJsonLine(const String &line, AppState &state) {
     state.idleInSeconds = constrain(doc["idleInSeconds"].as<int>(), -1, 999);
   } else {
     state.idleInSeconds = -1;
+  }
+
+  if (doc["servoPulseUs"].is<int>()) {
+    state.servoPulseUs = constrain(doc["servoPulseUs"].as<int>(), 500, 2500);
+  } else {
+    state.servoPulseUs = -1;
+  }
+
+  if (doc["selfTest"].is<bool>() && doc["selfTest"].as<bool>()) {
+    state.selfTestRequested = true;
+    state.servoPulseUs = -1;
   }
 
   state.lastUpdateMs = millis();

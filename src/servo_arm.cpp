@@ -58,6 +58,14 @@ void ServoArm::setWaitingForInput(bool waiting) {
   setActivity(waiting ? AiActivity::Waiting : AiActivity::Idle);
 }
 
+void ServoArm::setCalibrationPulse(int pulseUs) {
+  activity_ = AiActivity::Idle;
+  holdUntilMs_ = 0;
+  setTargetPulse(pulseUs);
+  Serial.print("servo calibration pulse us: ");
+  Serial.println(targetPulseUs_);
+}
+
 void ServoArm::update() {
   if (!attached_) {
     return;
