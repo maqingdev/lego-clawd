@@ -18,12 +18,14 @@ void ServoArm::begin() {
   ESP32PWM::allocateTimer(2);
   ESP32PWM::allocateTimer(3);
   servo.setPeriodHertz(50);
-  attached_ = servo.attach(Config::ServoSignalPin, 500, 2500) >= 0;
+  attached_ = servo.attach(Config::ServoSignalPin,
+                           Config::ServoMinPulseUs,
+                           Config::ServoMaxPulseUs) >= 0;
 
-  currentAngle_ = Config::ServoDownAngle;
-  targetAngle_ = Config::ServoDownAngle;
+  currentPulseUs_ = Config::ServoDownPulseUs;
+  targetPulseUs_ = Config::ServoDownPulseUs;
   if (attached_) {
-    servo.write(currentAngle_);
+    servo.writeMicroseconds(currentPulseUs_);
     Serial.println("servo arm ready");
   } else {
     Serial.println("servo attach failed");
@@ -36,17 +38,20 @@ void ServoArm::setActivity(AiActivity activity) {
 
   switch (activity_) {
     case AiActivity::Idle:
-      setTargetAngle(Config::ServoDownAngle);
+      setTargetPulse(Config::ServoDownPulseUs);
       break;
     case AiActivity::Working:
       workSwingForward_ = true;
-      setTargetAngle(Config::ServoWorkMaxAngle);
+      setTargetPulse(Config::ServoWorkMaxPulseUs);
       break;
     case AiActivity::Pending:
     case AiActivity::Waiting:
-      setTargetAngle(Config::ServoRaisedAngle);
+      setTargetPulse(Config::ServoRaisedPulseUs);
       break;
   }
+
+  Serial.print("servo target pulse us: ");
+  Serial.println(targetPulseUs_);
 }
 
 void ServoArm::setWaitingForInput(bool waiting) {
@@ -63,37 +68,33 @@ void ServoArm::update() {
     updateWorkingTarget(now);
   }
 
-  if (currentAngle_ == targetAngle_) {
-    return;
-  }
-
   if (now - lastStepMs_ < Config::ServoStepMs) {
     return;
   }
   lastStepMs_ = now;
 
-  if (currentAngle_ < targetAngle_) {
-    currentAngle_ = min(currentAngle_ + Config::ServoStepDegrees, targetAngle_);
-  } else {
-    currentAngle_ = max(currentAngle_ - Config::ServoStepDegrees, targetAngle_);
+  if (currentPulseUs_ < targetPulseUs_) {
+    currentPulseUs_ = min(currentPulseUs_ + Config::ServoStepPulseUs, targetPulseUs_);
+  } else if (currentPulseUs_ > targetPulseUs_) {
+    currentPulseUs_ = max(currentPulseUs_ - Config::ServoStepPulseUs, targetPulseUs_);
   }
 
-  servo.write(currentAngle_);
+  servo.writeMicroseconds(currentPulseUs_);
 }
 
-void ServoArm::setTargetAngle(int angle) {
-  targetAngle_ = constrain(angle, 0, 180);
+void ServoArm::setTargetPulse(int pulseUs) {
+  targetPulseUs_ = constrain(pulseUs, Config::ServoMinPulseUs, Config::ServoMaxPulseUs);
 }
 
 void ServoArm::updateWorkingTarget(uint32_t now) {
-  if (currentAngle_ != targetAngle_ || now < holdUntilMs_) {
+  if (currentPulseUs_ != targetPulseUs_ || now < holdUntilMs_) {
     return;
   }
 
   if (workSwingForward_) {
-    setTargetAngle(Config::ServoWorkMinAngle);
+    setTargetPulse(Config::ServoWorkMinPulseUs);
   } else {
-    setTargetAngle(Config::ServoWorkMaxAngle);
+    setTargetPulse(Config::ServoWorkMaxPulseUs);
   }
   workSwingForward_ = !workSwingForward_;
   holdUntilMs_ = now + Config::ServoWorkPauseMs;

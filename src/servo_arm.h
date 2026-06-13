@@ -14,12 +14,12 @@ class ServoArm {
  private:
   bool attached_ = false;
   AiActivity activity_ = AiActivity::Idle;
-  int currentAngle_ = 0;
-  int targetAngle_ = 0;
+  int currentPulseUs_ = 0;
+  int targetPulseUs_ = 0;
   bool workSwingForward_ = true;
   uint32_t lastStepMs_ = 0;
   uint32_t holdUntilMs_ = 0;
 
-  void setTargetAngle(int angle);
+  void setTargetPulse(int pulseUs);
   void updateWorkingTarget(uint32_t now);
 };

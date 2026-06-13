@@ -26,13 +26,14 @@ constexpr uint32_t WorkingBlinkIntervalMaxMs = 22000;
 constexpr uint32_t WorkingStrainIntervalMs = 900;
 constexpr uint32_t BlinkMs = 120;
 
-// Change this after wiring the servo signal line to a known free GPIO.
-constexpr int ServoSignalPin = 4;
-constexpr int ServoDownAngle = 35;
-constexpr int ServoWorkMinAngle = 50;
-constexpr int ServoWorkMaxAngle = 75;
-constexpr int ServoRaisedAngle = 115;
-constexpr int ServoStepDegrees = 2;
+constexpr int ServoSignalPin = 18;
+constexpr int ServoMinPulseUs = 500;
+constexpr int ServoMaxPulseUs = 2500;
+constexpr int ServoDownPulseUs = 700;
+constexpr int ServoWorkMinPulseUs = 1300;
+constexpr int ServoWorkMaxPulseUs = 1700;
+constexpr int ServoRaisedPulseUs = 2300;
+constexpr int ServoStepPulseUs = 20;
 constexpr uint32_t ServoStepMs = 20;
 constexpr uint32_t ServoWorkPauseMs = 350;
 

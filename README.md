@@ -107,6 +107,32 @@ Recommended first arm design:
 - movement range: roughly -60° to +60° around the neutral position
 - use a small 3D-printed or LEGO-compatible adapter on the white cross axle
 
+Servo wiring/debug notes:
+
+- Current servo signal GPIO: `GPIO18`.
+- `GPIO47`/`GPIO48` are shared with the IMU I2C bus, and `GPIO19`/`GPIO20`
+  are USB pins. Avoid those for the servo signal.
+- `GPIO39` is routed to the SD card interface. It is not preferred unless the
+  SD card is unused and the physical pin location is intentional.
+- The servo brown wire, the ESP32 `GND`, and the external USB 5V supply `-`
+  terminal must all be connected together as one common ground.
+- During bring-up, disconnect the servo 5V line before uploading firmware.
+  After upload/reset completes and the LCD is running, reconnect the servo 5V
+  line. This avoids the servo starting in a bad state while the ESP32 USB
+  serial/JTAG resets GPIO output.
+- The normal firmware drives the servo with explicit pulse widths rather than
+  degree angles. Tune these values in `include/config.h`:
+  `ServoDownPulseUs`, `ServoWorkMinPulseUs`, `ServoWorkMaxPulseUs`, and
+  `ServoRaisedPulseUs`.
+- A minimal GPIO18 servo test is available with:
+
+```sh
+~/.platformio/penv/bin/pio run -e servo_gpio18_test -t upload --upload-port /dev/cu.usbmodem101
+```
+
+The test firmware does not initialize the LCD, so the screen is expected to be
+black while it continuously cycles the servo pulse width.
+
 ## Power
 
 During development:
