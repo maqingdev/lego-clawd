@@ -9,6 +9,7 @@ enum class EyeExpression : uint8_t {
   Happy,
   Sleepy,
   Focused,
+  Strain,
   Wide,
   LookLeft,
   LookRight,

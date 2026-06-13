@@ -128,7 +128,11 @@ def format_reset(window: Any) -> str:
     return "--:--"
 
 
-def normalize_activity(value: Any, waiting: Any = None) -> str:
+def normalize_activity(value: Any, waiting: Any = None, pending: Any = None,
+                       hook_event: Any = None) -> str:
+    if hook_event == "PermissionRequest" or (isinstance(pending, bool) and pending):
+        return "pending"
+
     if isinstance(waiting, bool) and waiting:
         return "waiting"
 
@@ -186,7 +190,12 @@ def read_activity(args: argparse.Namespace, status: dict[str, Any] | None = None
     if status_is_stale(status, args.idle_timeout):
         return "idle"
 
-    return normalize_activity(status.get("state") or status.get("aiState"), status.get("waiting"))
+    return normalize_activity(
+        status.get("state") or status.get("aiState"),
+        status.get("waiting"),
+        status.get("pending"),
+        status.get("hookEvent"),
+    )
 
 
 def build_usage_payload(args: argparse.Namespace) -> dict[str, Any]:

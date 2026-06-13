@@ -42,7 +42,8 @@ bool DisplayUi::begin() {
 
 void DisplayUi::renderFace(EyeExpression expression, AiActivity activity,
                            int16_t idleInSeconds) {
-  if (activity == AiActivity::Working && expression != EyeExpression::Blink) {
+  if (activity == AiActivity::Working && expression != EyeExpression::Blink &&
+      expression != EyeExpression::Strain) {
     expression = EyeExpression::Focused;
   } else if (activity == AiActivity::Pending && expression != EyeExpression::Blink) {
     expression = EyeExpression::Wide;
@@ -93,6 +94,9 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
   } else if (expression == EyeExpression::Focused) {
     eyeH = 34;
     eyeY = y + 18;
+  } else if (expression == EyeExpression::Strain) {
+    eyeH = 26;
+    eyeY = y + 23;
   } else if (expression == EyeExpression::Wide) {
     eyeH = 70;
     eyeY = y - 6;
@@ -107,12 +111,16 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
 
   gfx->fillRoundRect(x + offsetX, eyeY, w, eyeH, 8, Black);
 
-  if (expression == EyeExpression::Focused) {
+  if (expression == EyeExpression::Focused || expression == EyeExpression::Strain) {
     for (int i = 0; i < 4; ++i) {
       if (leftEye) {
-        gfx->drawLine(x, y - 8 + i, x + w, y - 2 + i, Black);
+        const int16_t y1 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
+        const int16_t y2 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
+        gfx->drawLine(x, y1, x + w, y2, Black);
       } else {
-        gfx->drawLine(x, y - 2 + i, x + w, y - 8 + i, Black);
+        const int16_t y1 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
+        const int16_t y2 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
+        gfx->drawLine(x, y1, x + w, y2, Black);
       }
     }
   }

@@ -20,6 +20,8 @@ uint32_t nextEyeChangeMs = 0;
 uint32_t blinkUntilMs = 0;
 uint32_t usagePeekStartedMs = 0;
 uint32_t nextWorkingBlinkMs = 0;
+uint32_t nextWorkingStrainMs = 0;
+bool workingStrained = false;
 
 EyeExpression randomEyeExpression() {
   switch (random(0, 5)) {
@@ -44,6 +46,10 @@ void scheduleEyeChange() {
 void scheduleWorkingBlink() {
   nextWorkingBlinkMs = millis() + random(Config::WorkingBlinkIntervalMinMs,
                                          Config::WorkingBlinkIntervalMaxMs);
+}
+
+void scheduleWorkingStrain(uint32_t now) {
+  nextWorkingStrainMs = now + Config::WorkingStrainIntervalMs;
 }
 
 void renderCurrentScreen() {
@@ -91,16 +97,25 @@ void updateFaceExpression(uint32_t now) {
   if (state.aiActivity == AiActivity::Working) {
     if (blinkUntilMs > 0 && now >= blinkUntilMs) {
       blinkUntilMs = 0;
-      eyeExpression = EyeExpression::Focused;
+      eyeExpression = workingStrained ? EyeExpression::Strain : EyeExpression::Focused;
       renderCurrentScreen();
       scheduleWorkingBlink();
     } else if (blinkUntilMs == 0 && now >= nextWorkingBlinkMs) {
       eyeExpression = EyeExpression::Blink;
       blinkUntilMs = now + Config::BlinkMs;
       renderCurrentScreen();
-    } else if (blinkUntilMs == 0 && eyeExpression != EyeExpression::Focused) {
-      eyeExpression = EyeExpression::Focused;
+    } else if (blinkUntilMs == 0 && now >= nextWorkingStrainMs) {
+      workingStrained = !workingStrained;
+      eyeExpression = workingStrained ? EyeExpression::Strain : EyeExpression::Focused;
       renderCurrentScreen();
+      scheduleWorkingStrain(now);
+    } else if (blinkUntilMs == 0 && eyeExpression != EyeExpression::Focused &&
+               eyeExpression != EyeExpression::Strain) {
+      eyeExpression = workingStrained ? EyeExpression::Strain : EyeExpression::Focused;
+      renderCurrentScreen();
+      if (nextWorkingStrainMs == 0) {
+        scheduleWorkingStrain(now);
+      }
       if (nextWorkingBlinkMs == 0) {
         scheduleWorkingBlink();
       }
@@ -117,7 +132,8 @@ void updateFaceExpression(uint32_t now) {
     return;
   }
 
-  if (eyeExpression == EyeExpression::Focused || eyeExpression == EyeExpression::Wide) {
+  if (eyeExpression == EyeExpression::Focused || eyeExpression == EyeExpression::Strain ||
+      eyeExpression == EyeExpression::Wide) {
     eyeExpression = EyeExpression::Neutral;
     renderCurrentScreen();
     scheduleEyeChange();
@@ -160,6 +176,7 @@ void setup() {
   lastScreenSwitchMs = millis();
   scheduleEyeChange();
   scheduleWorkingBlink();
+  scheduleWorkingStrain(millis());
 }
 
 void loop() {

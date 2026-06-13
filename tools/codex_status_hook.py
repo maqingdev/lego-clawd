@@ -49,6 +49,10 @@ def read_hook_input() -> dict[str, Any]:
 def main() -> int:
     state = normalize_state(sys.argv[1] if len(sys.argv) > 1 else "idle")
     hook_input = read_hook_input()
+    hook_event = hook_input.get("hook_event_name")
+    if hook_event == "PermissionRequest":
+        state = "pending"
+
     base = Path.home() / ".lego-clawd"
     base.mkdir(parents=True, exist_ok=True)
 
@@ -57,7 +61,7 @@ def main() -> int:
         "waiting": state == "waiting",
         "pending": state == "pending",
         "updatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "hookEvent": hook_input.get("hook_event_name"),
+        "hookEvent": hook_event,
         "sessionId": hook_input.get("session_id"),
         "turnId": hook_input.get("turn_id"),
         "cwd": hook_input.get("cwd"),
