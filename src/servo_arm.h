@@ -18,9 +18,12 @@ class ServoArm {
   int currentPulseUs_ = 0;
   int targetPulseUs_ = 0;
   bool workSwingForward_ = true;
+  uint8_t workMovesRemaining_ = 0;
   uint32_t lastStepMs_ = 0;
   uint32_t holdUntilMs_ = 0;
+  uint32_t workRestUntilMs_ = 0;
 
   void setTargetPulse(int pulseUs);
   void updateWorkingTarget(uint32_t now);
+  void scheduleWorkingBurst();
 };

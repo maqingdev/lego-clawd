@@ -21,6 +21,7 @@ constexpr uint32_t UsagePeekDurationMs = 5000;
 constexpr uint32_t WaitingUsagePeekDelayMs = 5000;
 constexpr uint32_t EyeExpressionIntervalMinMs = 6500;
 constexpr uint32_t EyeExpressionIntervalMaxMs = 12000;
+constexpr uint32_t IdleSleepDelayMs = 45000;
 constexpr uint32_t WorkingBlinkIntervalMinMs = 12000;
 constexpr uint32_t WorkingBlinkIntervalMaxMs = 22000;
 constexpr uint32_t WorkingStrainIntervalMs = 900;
@@ -36,5 +37,9 @@ constexpr int ServoRaisedPulseUs = 1000;
 constexpr int ServoStepPulseUs = 10;
 constexpr uint32_t ServoStepMs = 25;
 constexpr uint32_t ServoWorkPauseMs = 1500;
+constexpr uint8_t ServoWorkBurstMinMoves = 2;
+constexpr uint8_t ServoWorkBurstMaxMoves = 4;
+constexpr uint32_t ServoWorkRestMinMs = 3500;
+constexpr uint32_t ServoWorkRestMaxMs = 6500;
 
 }

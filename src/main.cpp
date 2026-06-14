@@ -20,6 +20,7 @@ uint32_t nextEyeChangeMs = 0;
 uint32_t blinkUntilMs = 0;
 uint32_t usagePeekStartedMs = 0;
 uint32_t waitingUsagePeekAtMs = 0;
+uint32_t idleStartedMs = 0;
 uint32_t nextWorkingBlinkMs = 0;
 uint32_t nextWorkingStrainMs = 0;
 bool workingStrained = false;
@@ -45,20 +46,20 @@ constexpr SelfTestStep SelfTestSteps[] = {
 
 constexpr uint8_t SelfTestStepCount = sizeof(SelfTestSteps) / sizeof(SelfTestSteps[0]);
 
-EyeExpression randomEyeExpression() {
-  switch (random(0, 7)) {
+EyeExpression randomEyeExpression(bool allowSleep) {
+  switch (random(0, allowSleep ? 6 : 4)) {
     case 0:
       return EyeExpression::Neutral;
     case 1:
       return EyeExpression::Happy;
     case 2:
-      return EyeExpression::Sleepy;
-    case 3:
       return EyeExpression::LookLeft;
-    case 4:
-      return EyeExpression::Doze;
-    default:
+    case 3:
       return EyeExpression::LookRight;
+    case 4:
+      return EyeExpression::Sleepy;
+    default:
+      return EyeExpression::Doze;
   }
 }
 
@@ -74,6 +75,10 @@ void scheduleWorkingBlink() {
 
 void scheduleWorkingStrain(uint32_t now) {
   nextWorkingStrainMs = now + Config::WorkingStrainIntervalMs;
+}
+
+bool idleCanSleep(uint32_t now) {
+  return idleStartedMs > 0 && now - idleStartedMs >= Config::IdleSleepDelayMs;
 }
 
 void renderCurrentScreen() {
@@ -195,8 +200,19 @@ void updateFaceExpression(uint32_t now) {
     return;
   }
 
+  if (state.aiActivity == AiActivity::Waiting) {
+    if (eyeExpression != EyeExpression::Neutral) {
+      eyeExpression = EyeExpression::Neutral;
+      blinkUntilMs = 0;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
   if (eyeExpression == EyeExpression::Focused || eyeExpression == EyeExpression::Strain ||
-      eyeExpression == EyeExpression::Wide) {
+      eyeExpression == EyeExpression::Wide ||
+      (!idleCanSleep(now) && (eyeExpression == EyeExpression::Sleepy ||
+                              eyeExpression == EyeExpression::Doze))) {
     eyeExpression = EyeExpression::Neutral;
     renderCurrentScreen();
     scheduleEyeChange();
@@ -205,7 +221,7 @@ void updateFaceExpression(uint32_t now) {
 
   if (blinkUntilMs > 0 && now >= blinkUntilMs) {
     blinkUntilMs = 0;
-    eyeExpression = randomEyeExpression();
+    eyeExpression = randomEyeExpression(idleCanSleep(now));
     renderCurrentScreen();
     scheduleEyeChange();
   } else if (blinkUntilMs == 0 && now >= nextEyeChangeMs) {
@@ -222,14 +238,49 @@ void forceFaceScreen() {
   renderCurrentScreen();
 }
 
+void handleActivityTransition(AiActivity previousActivity, AiActivity currentActivity,
+                              uint32_t now) {
+  if (previousActivity == currentActivity) {
+    return;
+  }
+
+  if (currentActivity == AiActivity::Idle) {
+    idleStartedMs = now;
+    eyeExpression = EyeExpression::Neutral;
+    blinkUntilMs = 0;
+    scheduleEyeChange();
+    return;
+  }
+
+  idleStartedMs = 0;
+  blinkUntilMs = 0;
+  if (currentActivity == AiActivity::Working) {
+    workingStrained = false;
+    eyeExpression = EyeExpression::Focused;
+    scheduleWorkingBlink();
+    scheduleWorkingStrain(now);
+  } else if (currentActivity == AiActivity::Pending) {
+    eyeExpression = EyeExpression::Wide;
+  } else if (currentActivity == AiActivity::Waiting) {
+    eyeExpression = EyeExpression::Neutral;
+  }
+}
+
 void applySelfTestStep() {
   const SelfTestStep &step = SelfTestSteps[selfTestStep];
+  const uint32_t now = millis();
+  const AiActivity previousActivity = state.aiActivity;
   state.aiActivity = step.activity;
   state.aiWaitingForInput = step.activity == AiActivity::Waiting;
   state.servoPulseUs = -1;
   screen = step.screenMode;
   eyeExpression = step.expression;
   blinkUntilMs = 0;
+  handleActivityTransition(previousActivity, state.aiActivity, now);
+  if (previousActivity == state.aiActivity && state.aiActivity == AiActivity::Idle) {
+    idleStartedMs = now;
+  }
+  eyeExpression = step.expression;
   servoArm.setActivity(state.aiActivity);
   renderCurrentScreen();
   Serial.print("self-test step ");
@@ -266,6 +317,7 @@ void updateSelfTest(uint32_t now) {
     state.servoPulseUs = -1;
     screen = ScreenMode::Face;
     eyeExpression = EyeExpression::Neutral;
+    idleStartedMs = now;
     servoArm.setActivity(state.aiActivity);
     renderCurrentScreen();
     lastScreenSwitchMs = now;
@@ -293,6 +345,7 @@ void setup() {
   display.begin();
   renderCurrentScreen();
   lastScreenSwitchMs = millis();
+  idleStartedMs = lastScreenSwitchMs;
   scheduleEyeChange();
   scheduleWorkingBlink();
   scheduleWorkingStrain(millis());
@@ -301,23 +354,28 @@ void setup() {
 void loop() {
   const uint32_t now = millis();
   const AiActivity previousActivity = state.aiActivity;
+  const int16_t previousServoPulseUs = state.servoPulseUs;
 
   if (usageData.readSerialUpdate(Serial, state)) {
     if (state.selfTestRequested) {
       state.selfTestRequested = false;
       startSelfTest(now);
     } else {
-    if (previousActivity == AiActivity::Working && state.aiActivity == AiActivity::Waiting) {
-      waitingUsagePeekAtMs = now + Config::WaitingUsagePeekDelayMs;
-    } else if (state.aiActivity != AiActivity::Waiting) {
-      waitingUsagePeekAtMs = 0;
-    }
-    if (state.servoPulseUs >= 0) {
-      servoArm.setCalibrationPulse(state.servoPulseUs);
-    } else {
-      servoArm.setActivity(state.aiActivity);
-    }
-    forceFaceScreen();
+      handleActivityTransition(previousActivity, state.aiActivity, now);
+      if (previousActivity == AiActivity::Working &&
+          state.aiActivity == AiActivity::Waiting) {
+        waitingUsagePeekAtMs = now + Config::WaitingUsagePeekDelayMs;
+      } else if (state.aiActivity != AiActivity::Waiting) {
+        waitingUsagePeekAtMs = 0;
+      }
+      if (state.servoPulseUs >= 0) {
+        if (previousServoPulseUs != state.servoPulseUs) {
+          servoArm.setCalibrationPulse(state.servoPulseUs);
+        }
+      } else if (previousActivity != state.aiActivity || previousServoPulseUs >= 0) {
+        servoArm.setActivity(state.aiActivity);
+      }
+      forceFaceScreen();
     }
   }
 

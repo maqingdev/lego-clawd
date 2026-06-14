@@ -35,6 +35,7 @@ void ServoArm::begin() {
 void ServoArm::setActivity(AiActivity activity) {
   activity_ = activity;
   holdUntilMs_ = 0;
+  workRestUntilMs_ = 0;
 
   switch (activity_) {
     case AiActivity::Idle:
@@ -42,6 +43,7 @@ void ServoArm::setActivity(AiActivity activity) {
       break;
     case AiActivity::Working:
       workSwingForward_ = true;
+      scheduleWorkingBurst();
       setTargetPulse(Config::ServoWorkMaxPulseUs);
       break;
     case AiActivity::Pending:
@@ -61,6 +63,7 @@ void ServoArm::setWaitingForInput(bool waiting) {
 void ServoArm::setCalibrationPulse(int pulseUs) {
   activity_ = AiActivity::Idle;
   holdUntilMs_ = 0;
+  workRestUntilMs_ = 0;
   setTargetPulse(pulseUs);
   Serial.print("servo calibration pulse us: ");
   Serial.println(targetPulseUs_);
@@ -99,11 +102,31 @@ void ServoArm::updateWorkingTarget(uint32_t now) {
     return;
   }
 
+  if (workRestUntilMs_ > 0) {
+    if (static_cast<int32_t>(now - workRestUntilMs_) < 0) {
+      return;
+    }
+    workRestUntilMs_ = 0;
+    scheduleWorkingBurst();
+  }
+
+  if (workMovesRemaining_ == 0) {
+    workRestUntilMs_ = now + random(Config::ServoWorkRestMinMs,
+                                    Config::ServoWorkRestMaxMs + 1);
+    return;
+  }
+
   if (workSwingForward_) {
     setTargetPulse(Config::ServoWorkMinPulseUs);
   } else {
     setTargetPulse(Config::ServoWorkMaxPulseUs);
   }
   workSwingForward_ = !workSwingForward_;
+  --workMovesRemaining_;
   holdUntilMs_ = now + Config::ServoWorkPauseMs;
+}
+
+void ServoArm::scheduleWorkingBurst() {
+  workMovesRemaining_ = random(Config::ServoWorkBurstMinMoves,
+                               Config::ServoWorkBurstMaxMoves + 1);
 }
