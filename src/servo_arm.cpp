@@ -39,15 +39,18 @@ void ServoArm::setActivity(AiActivity activity) {
 
   switch (activity_) {
     case AiActivity::Idle:
+      setMotionSpeed(Config::ServoIdleStepPulseUs, Config::ServoIdleStepMs);
       setTargetPulse(Config::ServoDownPulseUs);
       break;
     case AiActivity::Working:
+      setMotionSpeed(Config::ServoStepPulseUs, Config::ServoStepMs);
       workSwingForward_ = true;
       scheduleWorkingBurst();
       setTargetPulse(Config::ServoWorkMaxPulseUs);
       break;
     case AiActivity::Pending:
     case AiActivity::Waiting:
+      setMotionSpeed(Config::ServoRaiseStepPulseUs, Config::ServoRaiseStepMs);
       setTargetPulse(Config::ServoRaisedPulseUs);
       break;
   }
@@ -64,6 +67,7 @@ void ServoArm::setCalibrationPulse(int pulseUs) {
   activity_ = AiActivity::Idle;
   holdUntilMs_ = 0;
   workRestUntilMs_ = 0;
+  setMotionSpeed(Config::ServoStepPulseUs, Config::ServoStepMs);
   setTargetPulse(pulseUs);
   Serial.print("servo calibration pulse us: ");
   Serial.println(targetPulseUs_);
@@ -79,18 +83,23 @@ void ServoArm::update() {
     updateWorkingTarget(now);
   }
 
-  if (now - lastStepMs_ < Config::ServoStepMs) {
+  if (now - lastStepMs_ < stepMs_) {
     return;
   }
   lastStepMs_ = now;
 
   if (currentPulseUs_ < targetPulseUs_) {
-    currentPulseUs_ = min(currentPulseUs_ + Config::ServoStepPulseUs, targetPulseUs_);
+    currentPulseUs_ = min(currentPulseUs_ + stepPulseUs_, targetPulseUs_);
   } else if (currentPulseUs_ > targetPulseUs_) {
-    currentPulseUs_ = max(currentPulseUs_ - Config::ServoStepPulseUs, targetPulseUs_);
+    currentPulseUs_ = max(currentPulseUs_ - stepPulseUs_, targetPulseUs_);
   }
 
   servo.writeMicroseconds(currentPulseUs_);
+}
+
+void ServoArm::setMotionSpeed(int stepPulseUs, uint32_t stepMs) {
+  stepPulseUs_ = max(1, stepPulseUs);
+  stepMs_ = max<uint32_t>(1, stepMs);
 }
 
 void ServoArm::setTargetPulse(int pulseUs) {

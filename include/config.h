@@ -36,10 +36,14 @@ constexpr int ServoWorkMaxPulseUs = 1750;
 constexpr int ServoRaisedPulseUs = 1000;
 constexpr int ServoStepPulseUs = 10;
 constexpr uint32_t ServoStepMs = 25;
+constexpr int ServoIdleStepPulseUs = 5;
+constexpr uint32_t ServoIdleStepMs = 35;
+constexpr int ServoRaiseStepPulseUs = 20;
+constexpr uint32_t ServoRaiseStepMs = 20;
 constexpr uint32_t ServoWorkPauseMs = 1500;
 constexpr uint8_t ServoWorkBurstMinMoves = 2;
 constexpr uint8_t ServoWorkBurstMaxMoves = 4;
-constexpr uint32_t ServoWorkRestMinMs = 3500;
-constexpr uint32_t ServoWorkRestMaxMs = 6500;
+constexpr uint32_t ServoWorkRestMinMs = 2000;
+constexpr uint32_t ServoWorkRestMaxMs = 3000;
 
 }
