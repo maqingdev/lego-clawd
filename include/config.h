@@ -26,7 +26,7 @@ constexpr uint32_t WorkingBlinkIntervalMaxMs = 22000;
 constexpr uint32_t WorkingStrainIntervalMs = 900;
 constexpr uint32_t BlinkMs = 120;
 
-constexpr int ServoSignalPin = 18;
+constexpr int ServoSignalPin = 42;
 constexpr int ServoMinPulseUs = 500;
 constexpr int ServoMaxPulseUs = 2500;
 constexpr int ServoDownPulseUs = 2200;

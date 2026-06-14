@@ -3,7 +3,7 @@
 
 namespace {
 
-constexpr int ServoPin = 18;
+constexpr int ServoPin = 42;
 
 Servo servo;
 
@@ -24,7 +24,7 @@ void setup() {
   Serial.begin(115200);
   delay(2500);
   Serial.println();
-  Serial.println("servo GPIO18 minimal test");
+  Serial.println("servo GPIO42 minimal test");
 
   ESP32PWM::allocateTimer(0);
   servo.setPeriodHertz(50);

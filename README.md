@@ -24,11 +24,11 @@ Servo:
 
 - LEGO-compatible AP3009-06 / JM 9g style servo
 - 3-wire servo control
-- Current signal pin: `GPIO18`
+- Current signal pin: `GPIO42`
 - Current wiring:
 
 ```text
-ESP32 GPIO18 -> servo signal
+ESP32 GPIO42 -> servo signal
 5V supply +   -> servo red wire
 5V supply -   -> servo brown wire
 ESP32 GND     -> same 5V supply - / common ground
@@ -96,7 +96,7 @@ The firmware constrains calibration pulses to `500us` through `2500us`.
 Minimal servo-only test firmware:
 
 ```sh
-~/.platformio/penv/bin/pio run -e servo_gpio18_test -t upload --upload-port /dev/cu.usbmodem101
+~/.platformio/penv/bin/pio run -e servo_gpio42_test -t upload --upload-port /dev/cu.usbmodem101
 ```
 
 The test firmware does not initialize the LCD, so the screen is expected to be
@@ -242,7 +242,7 @@ Upload normal firmware:
 Upload servo-only test firmware:
 
 ```sh
-~/.platformio/penv/bin/pio run -e servo_gpio18_test -t upload --upload-port /dev/cu.usbmodem101
+~/.platformio/penv/bin/pio run -e servo_gpio42_test -t upload --upload-port /dev/cu.usbmodem101
 ```
 
 Find devices:

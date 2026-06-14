@@ -23,7 +23,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 
 ## Servo
 
-- Servo signal pin: `GPIO18`.
+- Servo signal pin: `GPIO42`.
 - Current calibrated landmarks:
   - `1000us`: vertical up
   - `1675us`: straight forward
@@ -40,7 +40,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 {"servoPulseUs":1675}
 ```
 
-- Servo-only PlatformIO environment: `servo_gpio18_test`.
+- Servo-only PlatformIO environment: `servo_gpio42_test`.
 - Avoid servo signal on `GPIO47`/`GPIO48` (IMU I2C), `GPIO19`/`GPIO20` (USB),
   `GPIO39` (SD card), `GPIO9`-`GPIO14` (LCD), and boot/strapping pins.
 - All grounds must be common. Do not power servo from ESP32 `3V3`.
@@ -103,7 +103,7 @@ idle -> working -> pending -> waiting -> usage screen -> idle
 ```sh
 ~/.platformio/penv/bin/pio run
 ~/.platformio/penv/bin/pio run -t upload --upload-port /dev/cu.usbmodem101
-~/.platformio/penv/bin/pio run -e servo_gpio18_test -t upload --upload-port /dev/cu.usbmodem101
+~/.platformio/penv/bin/pio run -e servo_gpio42_test -t upload --upload-port /dev/cu.usbmodem101
 ./tools/run-bridge.sh --dry-run --once
 ./tools/run-bridge.sh --once --self-test
 ```

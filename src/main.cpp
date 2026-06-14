@@ -35,12 +35,12 @@ struct SelfTestStep {
 };
 
 constexpr SelfTestStep SelfTestSteps[] = {
+    {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 2000},
+    {AiActivity::Working, ScreenMode::Face, EyeExpression::Focused, 8000},
+    {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 3000},
+    {AiActivity::Waiting, ScreenMode::Face, EyeExpression::Neutral, 2000},
+    {AiActivity::Waiting, ScreenMode::Usage, EyeExpression::Neutral, 4000},
     {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 3000},
-    {AiActivity::Working, ScreenMode::Face, EyeExpression::Focused, 10000},
-    {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 5000},
-    {AiActivity::Waiting, ScreenMode::Face, EyeExpression::Neutral, 5000},
-    {AiActivity::Waiting, ScreenMode::Usage, EyeExpression::Neutral, 5000},
-    {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 4000},
 };
 
 constexpr uint8_t SelfTestStepCount = sizeof(SelfTestSteps) / sizeof(SelfTestSteps[0]);
