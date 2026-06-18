@@ -20,6 +20,7 @@ class ServoArm {
   int targetPulseUs_ = 0;
   int stepPulseUs_ = Config::ServoStepPulseUs;
   bool workSwingForward_ = true;
+  bool pendingWaveForward_ = true;
   uint8_t workMovesRemaining_ = 0;
   uint32_t lastStepMs_ = 0;
   uint32_t stepMs_ = Config::ServoStepMs;
@@ -28,6 +29,7 @@ class ServoArm {
 
   void setMotionSpeed(int stepPulseUs, uint32_t stepMs);
   void setTargetPulse(int pulseUs);
+  void updatePendingTarget(uint32_t now);
   void updateWorkingTarget(uint32_t now);
   void scheduleWorkingBurst();
 };

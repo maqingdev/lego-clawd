@@ -36,6 +36,7 @@ void ServoArm::setActivity(AiActivity activity) {
   activity_ = activity;
   holdUntilMs_ = 0;
   workRestUntilMs_ = 0;
+  pendingWaveForward_ = true;
 
   switch (activity_) {
     case AiActivity::Idle:
@@ -49,6 +50,9 @@ void ServoArm::setActivity(AiActivity activity) {
       setTargetPulse(Config::ServoWorkMaxPulseUs);
       break;
     case AiActivity::Pending:
+      setMotionSpeed(Config::ServoRaiseStepPulseUs, Config::ServoRaiseStepMs);
+      setTargetPulse(Config::ServoRaisedPulseUs);
+      break;
     case AiActivity::Waiting:
       setMotionSpeed(Config::ServoRaiseStepPulseUs, Config::ServoRaiseStepMs);
       setTargetPulse(Config::ServoRaisedPulseUs);
@@ -67,6 +71,7 @@ void ServoArm::setCalibrationPulse(int pulseUs) {
   activity_ = AiActivity::Idle;
   holdUntilMs_ = 0;
   workRestUntilMs_ = 0;
+  pendingWaveForward_ = true;
   setMotionSpeed(Config::ServoStepPulseUs, Config::ServoStepMs);
   setTargetPulse(pulseUs);
   Serial.print("servo calibration pulse us: ");
@@ -81,6 +86,8 @@ void ServoArm::update() {
   const uint32_t now = millis();
   if (activity_ == AiActivity::Working) {
     updateWorkingTarget(now);
+  } else if (activity_ == AiActivity::Pending) {
+    updatePendingTarget(now);
   }
 
   if (now - lastStepMs_ < stepMs_) {
@@ -104,6 +111,28 @@ void ServoArm::setMotionSpeed(int stepPulseUs, uint32_t stepMs) {
 
 void ServoArm::setTargetPulse(int pulseUs) {
   targetPulseUs_ = constrain(pulseUs, Config::ServoMinPulseUs, Config::ServoMaxPulseUs);
+}
+
+void ServoArm::updatePendingTarget(uint32_t now) {
+  if (currentPulseUs_ != targetPulseUs_) {
+    holdUntilMs_ = 0;
+    return;
+  }
+
+  if (holdUntilMs_ == 0) {
+    holdUntilMs_ = now + Config::ServoPendingWavePauseMs;
+    return;
+  }
+  if (static_cast<int32_t>(now - holdUntilMs_) < 0) {
+    return;
+  }
+
+  holdUntilMs_ = 0;
+  setMotionSpeed(Config::ServoPendingWaveStepPulseUs,
+                 Config::ServoPendingWaveStepMs);
+  setTargetPulse(pendingWaveForward_ ? Config::ServoPendingWaveForwardPulseUs
+                                     : Config::ServoRaisedPulseUs);
+  pendingWaveForward_ = !pendingWaveForward_;
 }
 
 void ServoArm::updateWorkingTarget(uint32_t now) {

@@ -38,7 +38,7 @@ struct SelfTestStep {
 constexpr SelfTestStep SelfTestSteps[] = {
     {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 2000},
     {AiActivity::Working, ScreenMode::Face, EyeExpression::Focused, 8000},
-    {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 3000},
+    {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 7000},
     {AiActivity::Waiting, ScreenMode::Face, EyeExpression::Neutral, 2000},
     {AiActivity::Waiting, ScreenMode::Usage, EyeExpression::Neutral, 4000},
     {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 3000},
