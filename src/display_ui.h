@@ -22,6 +22,7 @@ class DisplayUi {
   void renderFace(EyeExpression expression, const AppState &state);
   void renderWorkingBrows(EyeExpression expression);
   void renderPendingAttention(bool active);
+  void renderUsagePeekCue(const AppState &state);
   void renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
                           AiActivity activity, int16_t idleInSeconds);
   void renderFooter(const AppState &state);
@@ -39,6 +40,7 @@ class DisplayUi {
   void drawDozeMarks();
   void drawErrorFace();
   void drawErrorEye(int16_t x, int16_t y, int16_t size);
+  void drawUsageCuePanel();
   void drawFooter(const AppState &state);
   void workingLabel(const AppState &state, char *label, size_t size);
   void drawDebugState(AiActivity activity, int16_t idleInSeconds);

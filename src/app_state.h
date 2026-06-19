@@ -34,4 +34,5 @@ struct AppState {
 enum class ScreenMode : uint8_t {
   Face = 0,
   Usage = 1,
+  UsageCue = 2,
 };

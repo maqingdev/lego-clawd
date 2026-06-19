@@ -82,6 +82,14 @@ void DisplayUi::renderPendingAttention(bool active) {
   }
 }
 
+void DisplayUi::renderUsagePeekCue(const AppState &state) {
+  gfx->fillScreen(faceBackground());
+  drawEye(18, 52, 64, 58, EyeExpression::LookRight, true);
+  drawEye(202, 52, 64, 58, EyeExpression::LookRight, false);
+  drawUsageCuePanel();
+  drawFooter(state);
+}
+
 void DisplayUi::renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
                                    AiActivity activity, int16_t idleInSeconds) {
   gfx->fillScreen(faceBackground());
@@ -201,7 +209,7 @@ void DisplayUi::drawDozeMarks() {
 }
 
 void DisplayUi::drawErrorFace() {
-  gfx->fillScreen(rgb(238, 82, 83));
+  gfx->fillScreen(faceBackground());
   drawErrorEye(42, 48, 54);
   drawErrorEye(224, 48, 54);
   gfx->fillRoundRect(130, 112, 60, 10, 4, Black);
@@ -212,6 +220,18 @@ void DisplayUi::drawErrorEye(int16_t x, int16_t y, int16_t size) {
     gfx->drawLine(x + i, y, x + size + i, y + size, Black);
     gfx->drawLine(x + size + i, y, x + i, y + size, Black);
   }
+}
+
+void DisplayUi::drawUsageCuePanel() {
+  const uint16_t fill = rgb(255, 190, 43);
+  gfx->fillRoundRect(120, 30, 80, 86, 8, fill);
+  gfx->drawRoundRect(120, 30, 80, 86, 8, Black);
+  gfx->setTextColor(Black);
+  gfx->setTextSize(1);
+  gfx->setCursor(142, 42);
+  gfx->print("USAGE");
+  drawProgressBar(134, 64, 52, 10, 72);
+  drawProgressBar(134, 84, 52, 10, 44);
 }
 
 void DisplayUi::drawFooter(const AppState &state) {

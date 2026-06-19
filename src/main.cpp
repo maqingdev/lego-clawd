@@ -47,6 +47,7 @@ constexpr SelfTestStep SelfTestSteps[] = {
     {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 7000},
     {AiActivity::Waiting, ScreenMode::Face, EyeExpression::Neutral, 2000},
     {AiActivity::Error, ScreenMode::Face, EyeExpression::Neutral, 2500},
+    {AiActivity::Waiting, ScreenMode::UsageCue, EyeExpression::LookRight, 1600},
     {AiActivity::Waiting, ScreenMode::Usage, EyeExpression::Neutral, 4000},
     {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 3000},
 };
@@ -93,8 +94,8 @@ bool idleCanSleep(uint32_t now) {
 void startUsagePeekCue(uint32_t now) {
   usagePeekCueActive = true;
   usagePeekCueStartedMs = now;
-  screen = ScreenMode::Face;
   eyeExpression = EyeExpression::LookRight;
+  screen = ScreenMode::UsageCue;
   blinkUntilMs = 0;
   renderCurrentScreen();
 }
@@ -107,6 +108,9 @@ void renderCurrentScreen() {
     case ScreenMode::Usage:
       display.renderUsageSummary(state.codex5h, state.codex1w, state.aiActivity,
                                  state.idleInSeconds);
+      break;
+    case ScreenMode::UsageCue:
+      display.renderUsagePeekCue(state);
       break;
   }
 }
@@ -125,6 +129,16 @@ void updateScreenSchedule(uint32_t now) {
     return;
   }
 
+  if (usagePeekCueActive) {
+    if (now - usagePeekCueStartedMs >= Config::UsagePeekCueMs) {
+      usagePeekCueActive = false;
+      screen = ScreenMode::Usage;
+      usagePeekStartedMs = now;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
   if (state.aiActivity != AiActivity::Idle) {
     if (state.aiActivity == AiActivity::Waiting) {
       if (screen == ScreenMode::Usage) {
@@ -138,9 +152,7 @@ void updateScreenSchedule(uint32_t now) {
       if (waitingUsagePeekAtMs > 0 &&
           static_cast<int32_t>(now - waitingUsagePeekAtMs) >= 0) {
         waitingUsagePeekAtMs = 0;
-        screen = ScreenMode::Usage;
-        usagePeekStartedMs = now;
-        renderCurrentScreen();
+        startUsagePeekCue(now);
         return;
       }
     } else {
@@ -150,16 +162,6 @@ void updateScreenSchedule(uint32_t now) {
 
     if (screen != ScreenMode::Face) {
       screen = ScreenMode::Face;
-      renderCurrentScreen();
-    }
-    return;
-  }
-
-  if (usagePeekCueActive) {
-    if (now - usagePeekCueStartedMs >= Config::UsagePeekCueMs) {
-      usagePeekCueActive = false;
-      screen = ScreenMode::Usage;
-      usagePeekStartedMs = now;
       renderCurrentScreen();
     }
     return;

@@ -14,8 +14,8 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - Servo motion: `src/servo_arm.*`.
 - Shared state: `src/app_state.h`.
 - Activity states: `idle`, `working`, `pending`, `waiting`, and `error`.
-- `idle`: face animations, a short glance before occasional usage peeks, servo
-  resting pose.
+- `idle`: face animations, a visible mini usage cue before occasional usage
+  peeks, servo resting pose.
 - `working`: focused eyes, low-frequency blink, local-only brow animation,
   elapsed footer text that shifts into deep-work labels, servo slow front sweep.
 - `pending`: approval requested, wide eyes with animated attention mark and
