@@ -22,11 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let testApprovalItem = NSMenuItem(title: "Test Approval", action: nil, keyEquivalent: "3")
     private let testDoneItem = NSMenuItem(title: "Test Done", action: nil, keyEquivalent: "4")
     private let testErrorItem = NSMenuItem(title: "Test Error", action: nil, keyEquivalent: "5")
-    private let approvalTestItem = NSMenuItem(title: "Approval Test 10s", action: nil, keyEquivalent: "a")
     private let selfTestItem = NSMenuItem(title: "Self-Test", action: nil, keyEquivalent: "s")
 
     private var testItems: [NSMenuItem] {
-        [testIdleItem, testWorkingItem, testApprovalItem, testDoneItem, testErrorItem, approvalTestItem, selfTestItem]
+        [testIdleItem, testWorkingItem, testApprovalItem, testDoneItem, testErrorItem, selfTestItem]
     }
 
     static func main() {
@@ -92,7 +91,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(testApprovalItem)
         menu.addItem(testDoneItem)
         menu.addItem(testErrorItem)
-        menu.addItem(approvalTestItem)
         menu.addItem(selfTestItem)
         menu.addItem(.separator())
 
@@ -111,7 +109,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         testApprovalItem.action = #selector(testApproval)
         testDoneItem.action = #selector(testDone)
         testErrorItem.action = #selector(testError)
-        approvalTestItem.action = #selector(approvalTest)
         selfTestItem.action = #selector(selfTest)
 
         [connectionItem, aiStateItem, lastActionItem].forEach { item in
@@ -292,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func testApproval() {
         runAction("Approval") {
-            self.controller.sendState("pending")
+            self.controller.approvalTest(seconds: 6)
         }
     }
 
@@ -305,12 +302,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func testError() {
         runAction("Error") {
             self.controller.sendState("error")
-        }
-    }
-
-    @objc private func approvalTest() {
-        runAction("Approval Test") {
-            self.controller.approvalTest(seconds: 10)
         }
     }
 
@@ -394,7 +385,11 @@ final class LegoClawdController {
 
     func sendState(_ state: String) {
         runWithBridgePaused(label: "State \(state)") {
-            _ = self.runCommand(self.bridgeScript.path, ["--once", "--state", state], timeout: 15)
+            _ = self.runCommand(
+                self.bridgeScript.path,
+                ["--once", "--state", state, "--quiet-mode", self.quietMode ? "true" : "false"],
+                timeout: 15
+            )
         }
     }
 
@@ -410,7 +405,11 @@ final class LegoClawdController {
 
     func approvalTest(seconds: Int) {
         runWithBridgePaused(label: "Approval test") {
-            _ = self.runCommand(self.bridgeScript.path, ["--approval-test", "\(seconds)"], timeout: seconds + 15)
+            _ = self.runCommand(
+                self.bridgeScript.path,
+                ["--approval-test", "\(seconds)", "--quiet-mode", self.quietMode ? "true" : "false"],
+                timeout: seconds + 15
+            )
         }
     }
 

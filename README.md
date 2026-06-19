@@ -200,13 +200,13 @@ macos/build/Lego Clawd Bar.app
 Menu actions:
 
 - Connect Bridge / Disconnect Bridge
-- Release Serial for Flashing
-- Test Idle, Working, Approval, and Done
-- Approval Test 10s
-- Firmware Self-Test
-- Flash Firmware, which disconnects the bridge first and reconnects afterward
-  when `Reconnect After Flash` is enabled
-- Open Bridge Log
+- Quiet Mode
+- Test Idle, Working, Approval, Done, and Error
+- Self-Test
+
+`Test Approval` holds approval for 6 seconds, then returns the firmware to idle.
+When tests run while bridge is active, the app pauses bridge, sends the test, and
+restarts bridge with the current quiet mode.
 
 The app uses the repo root from `LEGO_CLAWD_PROJECT_ROOT` when present. If the
 environment variable is not set, it falls back to this iCloud project path:
