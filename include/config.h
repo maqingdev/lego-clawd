@@ -17,6 +17,7 @@ constexpr uint8_t LcdRotation = 3;
 constexpr int DisplayWidth = 320;
 constexpr int DisplayHeight = 170;
 constexpr uint32_t UsagePeekIntervalMs = 30000;
+constexpr uint32_t UsagePeekCueMs = 750;
 constexpr uint32_t UsagePeekDurationMs = 5000;
 constexpr uint32_t WaitingUsagePeekDelayMs = 5000;
 constexpr uint32_t EyeExpressionIntervalMinMs = 6500;
@@ -25,6 +26,8 @@ constexpr uint32_t IdleSleepDelayMs = 45000;
 constexpr uint32_t WorkingBlinkIntervalMinMs = 12000;
 constexpr uint32_t WorkingBlinkIntervalMaxMs = 22000;
 constexpr uint32_t WorkingStrainIntervalMs = 900;
+constexpr uint32_t WorkingDeepWorkDelayMs = 45000;
+constexpr uint32_t WorkingTiredDelayMs = 120000;
 constexpr uint32_t PendingAttentionIntervalMs = 700;
 constexpr uint32_t BlinkMs = 120;
 

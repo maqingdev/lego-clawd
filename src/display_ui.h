@@ -24,6 +24,7 @@ class DisplayUi {
   void renderPendingAttention(bool active);
   void renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
                           AiActivity activity, int16_t idleInSeconds);
+  void renderFooter(const AppState &state);
 
  private:
   uint16_t rgb(uint8_t red, uint8_t green, uint8_t blue) const;
@@ -39,6 +40,7 @@ class DisplayUi {
   void drawErrorFace();
   void drawErrorEye(int16_t x, int16_t y, int16_t size);
   void drawFooter(const AppState &state);
+  void workingLabel(const AppState &state, char *label, size_t size);
   void drawDebugState(AiActivity activity, int16_t idleInSeconds);
   void drawUsageBlock(int16_t x, const char *label, const UsageWindow &window);
   void drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent);

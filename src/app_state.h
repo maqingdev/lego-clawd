@@ -24,6 +24,7 @@ struct AppState {
   bool selfTestRequested = false;
   bool quietMode = false;
   int16_t idleInSeconds = -1;
+  int16_t activityElapsedSeconds = -1;
   int16_t servoPulseUs = -1;
   int16_t pendingWaveForwardPulseUs = Config::ServoPendingWaveForwardPulseUs;
   uint16_t pendingWavePauseMs = Config::ServoPendingWavePauseMs;

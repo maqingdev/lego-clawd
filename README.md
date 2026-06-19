@@ -131,8 +131,8 @@ Activity behavior:
 
 | State | Screen behavior | Servo behavior |
 |---|---|---|
-| `idle` | face animations and occasional usage peeks | resting pose |
-| `working` | focused eyes, low-frequency blink, brow animation | slow front sweep |
+| `idle` | face animations and a short glance before occasional usage peeks | resting pose |
+| `working` | focused eyes, low-frequency blink, brow animation, elapsed/deep-work footer | slow front sweep |
 | `pending` | wide eyes, animated attention mark, and `APPROVAL` label | raised hand with a short wave |
 | `waiting` | `DONE` label, then usage peek | raised hand |
 | `error` | red error face with X eyes | resting pose |

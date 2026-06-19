@@ -95,6 +95,10 @@ void DisplayUi::renderUsageSummary(const UsageWindow &codex5h, const UsageWindow
   drawDebugState(activity, idleInSeconds);
 }
 
+void DisplayUi::renderFooter(const AppState &state) {
+  drawFooter(state);
+}
+
 uint16_t DisplayUi::rgb(uint8_t red, uint8_t green, uint8_t blue) const {
   return ((red & 0xf8) << 8) | ((green & 0xfc) << 3) | (blue >> 3);
 }
@@ -215,7 +219,7 @@ void DisplayUi::drawFooter(const AppState &state) {
   if (state.servoPulseUs >= 0) {
     snprintf(label, sizeof(label), "SERVO %dus", state.servoPulseUs);
   } else if (state.aiActivity == AiActivity::Working) {
-    snprintf(label, sizeof(label), "WORKING");
+    workingLabel(state, label, sizeof(label));
   } else if (state.aiActivity == AiActivity::Pending) {
     snprintf(label, sizeof(label), "APPROVAL");
   } else if (state.aiActivity == AiActivity::Waiting) {
@@ -244,6 +248,19 @@ void DisplayUi::drawFooter(const AppState &state) {
   const int16_t textWidth = static_cast<int16_t>(strlen(footer) * 6);
   gfx->setCursor(max<int16_t>(0, (Config::DisplayWidth - textWidth) / 2), 158);
   gfx->print(footer);
+}
+
+void DisplayUi::workingLabel(const AppState &state, char *label, size_t size) {
+  const int16_t elapsed = state.activityElapsedSeconds;
+  if (elapsed >= static_cast<int16_t>(Config::WorkingTiredDelayMs / 1000)) {
+    snprintf(label, size, "FOCUSED %dm", max<int16_t>(1, elapsed / 60));
+  } else if (elapsed >= static_cast<int16_t>(Config::WorkingDeepWorkDelayMs / 1000)) {
+    snprintf(label, size, "DEEP WORK %dm", max<int16_t>(1, elapsed / 60));
+  } else if (elapsed >= 0) {
+    snprintf(label, size, "WORKING %ds", elapsed);
+  } else {
+    snprintf(label, size, "WORKING");
+  }
 }
 
 void DisplayUi::drawDebugState(AiActivity activity, int16_t idleInSeconds) {

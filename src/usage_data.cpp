@@ -13,6 +13,7 @@ void UsageData::begin(AppState &state) {
   state.selfTestRequested = false;
   state.quietMode = false;
   state.idleInSeconds = -1;
+  state.activityElapsedSeconds = -1;
   state.lastUpdateMs = millis();
 }
 
