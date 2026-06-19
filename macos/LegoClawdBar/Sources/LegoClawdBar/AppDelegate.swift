@@ -4,7 +4,7 @@ import Foundation
 
 @main
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let controller = LegoClawdController()
     private var refreshTimer: Timer?
@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.toolTip = "Lego Clawd"
 
         let menu = NSMenu()
+        menu.delegate = self
         menu.autoenablesItems = false
         menu.addItem(groupHeader("Status"))
         menu.addItem(bridgeItem)
@@ -113,6 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.action = nil
         }
         statusItem.menu = menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshStatus()
     }
 
     private func groupHeader(_ title: String) -> NSMenuItem {
@@ -237,13 +242,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleBridge() {
-        let shouldDisconnect = controller.snapshot().bridgeRunning
-        runAction(shouldDisconnect ? "Disconnect" : "Connect") {
-            if shouldDisconnect {
+        if disconnectBridgeItem.isEnabled {
+            runAction("Disconnect") {
                 self.controller.stopBridge()
-            } else {
+            }
+        } else if connectBridgeItem.isEnabled {
+            runAction("Connect") {
                 self.controller.startBridge()
             }
+        } else {
+            refreshStatus()
         }
     }
 
