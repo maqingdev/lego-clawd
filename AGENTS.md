@@ -12,6 +12,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - LCD rendering: `src/display_ui.*`.
 - Serial JSON parsing: `src/usage_data.*`.
 - Servo motion: `src/servo_arm.*`.
+- Persistent board settings: `src/persistent_settings.*`.
 - Shared state: `src/app_state.h`.
 - Activity states: `idle`, `working`, `pending`, `waiting`, and `error`.
 - `idle`: face animations, a visible mini usage cue before occasional usage
@@ -22,10 +23,17 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
   `APPROVAL` label, servo raised with short wave.
 - `waiting`: task complete and waiting for user input, `DONE` label, servo
   raised.
-- `error`: red error face with X eyes, servo resting pose.
-- `quietMode`: keeps LCD state updates active but suppresses servo activity and
-  returns the arm to resting pose.
+- `error`: normal orange face background with X eyes and `ERROR` footer, servo
+  resting pose.
+- `quietMode`: keeps LCD state updates active, shows only a small quiet icon in
+  the footer, suppresses servo activity, and moves the arm quickly to `2300us`.
+  It is persisted on the ESP32 with Preferences/NVS and restored after reset.
 - Usage screen is firmware-timed; bridge only updates cached data over serial.
+- After firmware code changes, prefer building and uploading the firmware to the
+  ESP32 in the same turn so the physical robot matches the repo. If the upload
+  seems risky, the change is large, the board/serial port is unavailable, or the
+  change is not worth flashing immediately, explicitly tell the user that the
+  firmware has not been flashed yet.
 
 ## Servo
 
@@ -36,6 +44,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
   - `2300us`: vertical down
 - Current state mapping:
   - `idle`: `2200us`
+  - `quietMode`: `2300us`
   - `working`: slow sweep from `1600us` to `1750us`
   - `pending`: wave between `1000us` and `1150us`
   - `waiting`: `1000us`
@@ -45,6 +54,8 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 ```json
 {"quietMode":true}
 ```
+
+Quiet mode is saved on the board; send `{"quietMode":false}` to turn it off.
 
 - Servo commands use pulse widths, not degree angles.
 - Manual calibration JSON:

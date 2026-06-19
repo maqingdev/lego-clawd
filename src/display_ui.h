@@ -42,6 +42,7 @@ class DisplayUi {
   void drawErrorEye(int16_t x, int16_t y, int16_t size);
   void drawUsageCuePanel();
   void drawFooter(const AppState &state);
+  void drawQuietIcon();
   void workingLabel(const AppState &state, char *label, size_t size);
   void drawDebugState(AiActivity activity, int16_t idleInSeconds);
   void drawUsageBlock(int16_t x, const char *label, const UsageWindow &window);

@@ -3,6 +3,7 @@
 #include "app_state.h"
 #include "config.h"
 #include "display_ui.h"
+#include "persistent_settings.h"
 #include "servo_arm.h"
 #include "usage_data.h"
 
@@ -12,6 +13,7 @@ AppState state;
 DisplayUi display;
 ServoArm servoArm;
 UsageData usageData;
+PersistentSettings settings;
 
 ScreenMode screen = ScreenMode::Face;
 EyeExpression eyeExpression = EyeExpression::Neutral;
@@ -433,7 +435,9 @@ void setup() {
 
   randomSeed(esp_random());
   usageData.begin(state);
+  settings.begin(state);
   servoArm.begin();
+  servoArm.setQuietMode(state.quietMode);
   servoArm.setActivity(state.aiActivity);
 
   display.begin();
@@ -456,6 +460,7 @@ void loop() {
 
   if (usageData.readSerialUpdate(Serial, state)) {
     if (previousQuietMode != state.quietMode) {
+      settings.saveQuietMode(state.quietMode);
       servoArm.setQuietMode(state.quietMode);
     }
 

@@ -43,8 +43,8 @@ void ServoArm::applyActivityTarget() {
   pendingWaveForward_ = true;
 
   if (quietMode_) {
-    setMotionSpeed(Config::ServoIdleStepPulseUs, Config::ServoIdleStepMs);
-    setTargetPulse(Config::ServoDownPulseUs);
+    setMotionSpeed(Config::ServoQuietStepPulseUs, Config::ServoQuietStepMs);
+    setTargetPulse(Config::ServoQuietPulseUs);
     Serial.print("servo quiet target pulse us: ");
     Serial.println(targetPulseUs_);
     return;
@@ -85,8 +85,8 @@ void ServoArm::setWaitingForInput(bool waiting) {
 
 void ServoArm::setCalibrationPulse(int pulseUs) {
   if (quietMode_) {
-    setMotionSpeed(Config::ServoIdleStepPulseUs, Config::ServoIdleStepMs);
-    setTargetPulse(Config::ServoDownPulseUs);
+    setMotionSpeed(Config::ServoQuietStepPulseUs, Config::ServoQuietStepMs);
+    setTargetPulse(Config::ServoQuietPulseUs);
     Serial.println("servo calibration ignored in quiet mode");
     return;
   }

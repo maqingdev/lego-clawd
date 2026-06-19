@@ -55,6 +55,7 @@ Avoid these GPIOs for the servo signal:
 - `src/display_ui.*`: LCD rendering
 - `src/usage_data.*`: serial JSON parsing
 - `src/servo_arm.*`: servo movement
+- `src/persistent_settings.*`: ESP32 NVS-backed settings such as quiet mode
 - `src/app_state.h`: shared app state
 - `tools/codexbar_bridge.py`: host bridge from CodexBar usage JSON to serial
 - `tools/run-bridge.sh`: wrapper that finds the serial port and runs the bridge
@@ -137,8 +138,10 @@ Activity behavior:
 | `waiting` | `DONE` label, then usage peek | raised hand |
 | `error` | red error face with X eyes | resting pose |
 
-When `quietMode` is true, the LCD still reflects the current state but the servo
-returns to the resting pose and stays quiet.
+When `quietMode` is true, the LCD still reflects the current state with a small
+quiet icon in the footer. The servo suppresses activity motion and moves quickly
+to a lower/back resting pose. Quiet mode is persisted on the ESP32 and restored
+after reset until `quietMode:false` is received.
 
 The usage screen is firmware-timed. The bridge only updates cached usage data
 over serial.

@@ -252,13 +252,6 @@ void DisplayUi::drawFooter(const AppState &state) {
     snprintf(label, sizeof(label), "ERROR");
   }
 
-  if (state.quietMode && state.servoPulseUs < 0) {
-    char quietLabel[40];
-    snprintf(quietLabel, sizeof(quietLabel), "QUIET | %s", label);
-    strncpy(label, quietLabel, sizeof(label));
-    label[sizeof(label) - 1] = '\0';
-  }
-
   char footer[56];
   snprintf(footer, sizeof(footer), "%u%% | %s", state.codex5h.remainingPercent, label);
 
@@ -268,6 +261,21 @@ void DisplayUi::drawFooter(const AppState &state) {
   const int16_t textWidth = static_cast<int16_t>(strlen(footer) * 6);
   gfx->setCursor(max<int16_t>(0, (Config::DisplayWidth - textWidth) / 2), 158);
   gfx->print(footer);
+
+  if (state.quietMode && state.servoPulseUs < 0) {
+    drawQuietIcon();
+  }
+}
+
+void DisplayUi::drawQuietIcon() {
+  constexpr int16_t cx = 303;
+  constexpr int16_t cy = 160;
+  constexpr int16_t r = 6;
+  gfx->drawCircle(cx, cy, r, Black);
+  gfx->drawCircle(cx, cy, r - 1, Black);
+  for (int i = 0; i < 2; ++i) {
+    gfx->drawLine(cx - 5, cy + 5 - i, cx + 5, cy - 5 - i, Black);
+  }
 }
 
 void DisplayUi::workingLabel(const AppState &state, char *label, size_t size) {

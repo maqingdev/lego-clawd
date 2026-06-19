@@ -416,7 +416,11 @@ final class LegoClawdController {
 
     func selfTest() {
         runWithBridgePaused(label: "Self-test") {
-            _ = self.runCommand(self.bridgeScript.path, ["--once", "--self-test"], timeout: 20)
+            _ = self.runCommand(
+                self.bridgeScript.path,
+                ["--once", "--self-test", "--quiet-mode", self.quietMode ? "true" : "false"],
+                timeout: 20
+            )
         }
     }
 
