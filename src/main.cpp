@@ -23,7 +23,9 @@ uint32_t waitingUsagePeekAtMs = 0;
 uint32_t idleStartedMs = 0;
 uint32_t nextWorkingBlinkMs = 0;
 uint32_t nextWorkingStrainMs = 0;
+uint32_t nextPendingAttentionMs = 0;
 bool workingStrained = false;
+bool pendingAttentionActive = false;
 bool selfTestActive = false;
 uint8_t selfTestStep = 0;
 uint32_t selfTestStepStartedMs = 0;
@@ -192,7 +194,16 @@ void updateFaceExpression(uint32_t now) {
   }
 
   if (state.aiActivity == AiActivity::Pending) {
-    if (eyeExpression != EyeExpression::Wide) {
+    if (now >= nextPendingAttentionMs) {
+      pendingAttentionActive = !pendingAttentionActive;
+      blinkUntilMs = 0;
+      if (eyeExpression != EyeExpression::Wide) {
+        eyeExpression = EyeExpression::Wide;
+        renderCurrentScreen();
+      }
+      display.renderPendingAttention(pendingAttentionActive);
+      nextPendingAttentionMs = now + Config::PendingAttentionIntervalMs;
+    } else if (eyeExpression != EyeExpression::Wide) {
       eyeExpression = EyeExpression::Wide;
       blinkUntilMs = 0;
       renderCurrentScreen();
@@ -246,6 +257,8 @@ void handleActivityTransition(AiActivity previousActivity, AiActivity currentAct
 
   if (currentActivity == AiActivity::Idle) {
     idleStartedMs = now;
+    pendingAttentionActive = false;
+    nextPendingAttentionMs = 0;
     eyeExpression = EyeExpression::Neutral;
     blinkUntilMs = 0;
     scheduleEyeChange();
@@ -255,13 +268,19 @@ void handleActivityTransition(AiActivity previousActivity, AiActivity currentAct
   idleStartedMs = 0;
   blinkUntilMs = 0;
   if (currentActivity == AiActivity::Working) {
+    pendingAttentionActive = false;
+    nextPendingAttentionMs = 0;
     workingStrained = false;
     eyeExpression = EyeExpression::Focused;
     scheduleWorkingBlink();
     scheduleWorkingStrain(now);
   } else if (currentActivity == AiActivity::Pending) {
+    pendingAttentionActive = false;
+    nextPendingAttentionMs = now;
     eyeExpression = EyeExpression::Wide;
   } else if (currentActivity == AiActivity::Waiting) {
+    pendingAttentionActive = false;
+    nextPendingAttentionMs = 0;
     eyeExpression = EyeExpression::Neutral;
   }
 }
@@ -355,8 +374,16 @@ void loop() {
   const uint32_t now = millis();
   const AiActivity previousActivity = state.aiActivity;
   const int16_t previousServoPulseUs = state.servoPulseUs;
+  const int16_t previousPendingWaveForwardPulseUs = state.pendingWaveForwardPulseUs;
+  const uint16_t previousPendingWavePauseMs = state.pendingWavePauseMs;
 
   if (usageData.readSerialUpdate(Serial, state)) {
+    if (previousPendingWaveForwardPulseUs != state.pendingWaveForwardPulseUs ||
+        previousPendingWavePauseMs != state.pendingWavePauseMs) {
+      servoArm.setPendingWaveConfig(state.pendingWaveForwardPulseUs,
+                                    state.pendingWavePauseMs);
+    }
+
     if (state.selfTestRequested) {
       state.selfTestRequested = false;
       startSelfTest(now);

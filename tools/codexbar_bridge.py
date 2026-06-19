@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -17,6 +18,7 @@ DEFAULT_USAGE_FILE = (
     / "Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json"
 )
 DEFAULT_AI_STATUS_FILE = Path.home() / ".lego-clawd/ai-status.json"
+ACTIVITIES = ("idle", "working", "pending", "waiting")
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +45,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--once", action="store_true", help="Send/read once and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Print JSON without serial.")
     parser.add_argument(
+        "--state",
+        choices=("idle", "working", "pending", "approval", "waiting", "done"),
+        help="Override AI state. 'approval' is an alias for pending; 'done' is waiting.",
+    )
+    parser.add_argument(
+        "--list-states",
+        action="store_true",
+        help="List supported AI states and aliases, then exit.",
+    )
+    parser.add_argument(
+        "--approval-test",
+        type=float,
+        metavar="SECONDS",
+        help="Send pending/approval, hold for SECONDS, send idle, then exit.",
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
         help="Include selfTest=true so the firmware runs its end-to-end demo.",
@@ -63,6 +81,16 @@ def parse_args() -> argparse.Namespace:
         "--waiting-file",
         type=Path,
         help="Legacy file containing true/false, 1/0, waiting/idle.",
+    )
+    parser.add_argument(
+        "--pending-wave-forward-pulse-us",
+        type=int,
+        help="Temporarily override pending wave forward endpoint pulse width.",
+    )
+    parser.add_argument(
+        "--pending-wave-pause-ms",
+        type=int,
+        help="Temporarily override pending wave endpoint pause in milliseconds.",
     )
     return parser.parse_args()
 
@@ -158,6 +186,15 @@ def normalize_activity(value: Any, waiting: Any = None, pending: Any = None,
     return "idle"
 
 
+def print_supported_states() -> None:
+    print("states:")
+    for activity in ACTIVITIES:
+        print(f"  {activity}")
+    print("aliases:")
+    print("  approval -> pending")
+    print("  done     -> waiting")
+
+
 def status_is_stale(status: dict[str, Any], timeout_seconds: float) -> bool:
     updated_at = status.get("updatedAt")
     if not isinstance(updated_at, str) or timeout_seconds <= 0:
@@ -179,6 +216,12 @@ def load_ai_status(args: argparse.Namespace) -> dict[str, Any] | None:
 
 
 def read_activity(args: argparse.Namespace, status: dict[str, Any] | None = None) -> str:
+    if args.approval_test is not None:
+        return "pending"
+
+    if args.state is not None:
+        return normalize_activity(args.state)
+
     if args.waiting_file:
         try:
             text = args.waiting_file.read_text(encoding="utf-8").strip().lower()
@@ -229,8 +272,16 @@ def build_status_payload(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def add_runtime_overrides(payload: dict[str, Any], args: argparse.Namespace) -> None:
+    if args.pending_wave_forward_pulse_us is not None:
+        payload["pendingWaveForwardPulseUs"] = args.pending_wave_forward_pulse_us
+    if args.pending_wave_pause_ms is not None:
+        payload["pendingWavePauseMs"] = args.pending_wave_pause_ms
+
+
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     payload = {**build_usage_payload(args), **build_status_payload(args)}
+    add_runtime_overrides(payload, args)
     if args.self_test:
         payload["selfTest"] = True
     return payload
@@ -260,11 +311,38 @@ def open_serial(port: str, baud: int):
             "or install pyserial for your Python."
         ) from error
 
-    return serial.Serial(port, baudrate=baud, timeout=1, write_timeout=1)
+    try:
+        return serial.Serial(port, baudrate=baud, timeout=1, write_timeout=1)
+    except Exception as error:
+        detail = describe_serial_owner(port)
+        if detail:
+            raise RuntimeError(f"could not open {port}: {error}\n{detail}") from error
+        raise RuntimeError(f"could not open {port}: {error}") from error
+
+
+def describe_serial_owner(port: str) -> str:
+    try:
+        result = subprocess.run(
+            ["lsof", port],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return ""
+
+    if result.returncode == 0 and result.stdout.strip():
+        return f"{port} appears to be in use:\n{result.stdout.strip()}"
+    return f"No process was reported by lsof for {port}."
 
 
 def main() -> int:
     args = parse_args()
+    if args.list_states:
+        print_supported_states()
+        return 0
+
     if args.interval is not None:
         args.state_interval = args.interval
 
@@ -294,7 +372,26 @@ def main() -> int:
         serial_conn.flush()
         emit(f"{port} <- {line}", args.log_file)
 
+    def send_activity_once(activity: str, usage_payload: dict[str, Any]) -> None:
+        payload = {
+            **usage_payload,
+            "aiState": activity,
+            "waiting": activity == "waiting",
+            "pending": activity == "pending",
+            "idleIn": -1,
+        }
+        add_runtime_overrides(payload, args)
+        send_payload(payload)
+
     try:
+        if args.approval_test is not None:
+            usage_payload = build_usage_payload(args)
+            send_activity_once("pending", usage_payload)
+            if not args.dry_run:
+                time.sleep(max(0.0, args.approval_test))
+            send_activity_once("idle", usage_payload)
+            return 0
+
         while True:
             now = time.monotonic()
             usage_due = (
@@ -310,6 +407,7 @@ def main() -> int:
 
             assert usage_payload is not None
             payload = {**usage_payload, **build_status_payload(args)}
+            add_runtime_overrides(payload, args)
             if args.self_test:
                 payload["selfTest"] = True
 

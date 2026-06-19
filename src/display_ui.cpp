@@ -69,6 +69,13 @@ void DisplayUi::renderWorkingBrows(EyeExpression expression) {
   drawWorkingBrow(232, 52, 64, expression, false);
 }
 
+void DisplayUi::renderPendingAttention(bool active) {
+  clearApprovalMarks();
+  if (active) {
+    drawApprovalMarks();
+  }
+}
+
 void DisplayUi::renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
                                    AiActivity activity, int16_t idleInSeconds) {
   gfx->fillScreen(faceBackground());
@@ -155,6 +162,24 @@ void DisplayUi::drawWorkingBrow(int16_t x, int16_t y, int16_t w,
   }
 }
 
+void DisplayUi::clearApprovalMarks() {
+  gfx->fillRect(112, 18, 22, 22, faceBackground());
+  gfx->fillRect(154, 16, 14, 38, faceBackground());
+  gfx->fillRect(186, 18, 22, 22, faceBackground());
+}
+
+void DisplayUi::drawApprovalMarks() {
+  for (int i = 0; i < 4; ++i) {
+    gfx->drawLine(158 + i, 18, 158 + i, 40, Black);
+  }
+  gfx->fillCircle(160, 49, 3, Black);
+
+  for (int i = 0; i < 3; ++i) {
+    gfx->drawLine(115, 24 + i, 132, 35 + i, Black);
+    gfx->drawLine(205, 24 + i, 188, 35 + i, Black);
+  }
+}
+
 void DisplayUi::drawDozeMarks() {
   gfx->setTextColor(Black);
   gfx->setTextSize(1);
@@ -172,12 +197,12 @@ void DisplayUi::drawFooter(const AppState &state) {
   } else if (state.aiActivity == AiActivity::Working) {
     snprintf(label, sizeof(label), "WORKING");
   } else if (state.aiActivity == AiActivity::Pending) {
-    snprintf(label, sizeof(label), "PENDING");
+    snprintf(label, sizeof(label), "APPROVAL");
   } else if (state.aiActivity == AiActivity::Waiting) {
     if (state.idleInSeconds >= 0) {
-      snprintf(label, sizeof(label), "WAITING -> IDLE %ds", state.idleInSeconds);
+      snprintf(label, sizeof(label), "DONE -> IDLE %ds", state.idleInSeconds);
     } else {
-      snprintf(label, sizeof(label), "WAITING");
+      snprintf(label, sizeof(label), "DONE");
     }
   }
 
@@ -197,12 +222,12 @@ void DisplayUi::drawDebugState(AiActivity activity, int16_t idleInSeconds) {
   if (activity == AiActivity::Working) {
     snprintf(label, sizeof(label), "WORKING");
   } else if (activity == AiActivity::Pending) {
-    snprintf(label, sizeof(label), "PENDING");
+    snprintf(label, sizeof(label), "APPROVAL");
   } else if (activity == AiActivity::Waiting) {
     if (idleInSeconds >= 0) {
-      snprintf(label, sizeof(label), "WAITING -> IDLE %ds", idleInSeconds);
+      snprintf(label, sizeof(label), "DONE -> IDLE %ds", idleInSeconds);
     } else {
-      snprintf(label, sizeof(label), "WAITING");
+      snprintf(label, sizeof(label), "DONE");
     }
   }
 

@@ -36,7 +36,17 @@ find_port() {
 }
 
 PORT=${LEGO_CLAWD_PORT:-}
-if [ -z "$PORT" ]; then
+NEEDS_PORT=1
+for arg in "$@"
+do
+  case "$arg" in
+    --help|-h|--list-states|--dry-run)
+      NEEDS_PORT=0
+      ;;
+  esac
+done
+
+if [ -z "$PORT" ] && [ "$NEEDS_PORT" -eq 1 ]; then
   log "Searching for ESP32 serial port..."
   if ! PORT=$(find_port); then
     log "No ESP32 serial port found. Connect the board, then run: pio device list"
@@ -46,7 +56,11 @@ fi
 
 log "Lego Clawd bridge"
 log "Project: $PROJECT_ROOT"
-log "Port:    $PORT"
+if [ -n "$PORT" ]; then
+  log "Port:    $PORT"
+else
+  log "Port:    not required for this command"
+fi
 log "Python:  $PYTHON_BIN"
 log "State poll: ${LEGO_CLAWD_STATE_INTERVAL:-1}s"
 log "Usage refresh: ${LEGO_CLAWD_USAGE_INTERVAL:-60}s"
@@ -60,4 +74,8 @@ set -- \
   "$@"
 
 cd "$PROJECT_ROOT"
-env PYTHONUNBUFFERED=1 "$PYTHON_BIN" "$PROJECT_ROOT/tools/codexbar_bridge.py" --port "$PORT" "$@"
+if [ -n "$PORT" ]; then
+  env PYTHONUNBUFFERED=1 "$PYTHON_BIN" "$PROJECT_ROOT/tools/codexbar_bridge.py" --port "$PORT" "$@"
+else
+  env PYTHONUNBUFFERED=1 "$PYTHON_BIN" "$PROJECT_ROOT/tools/codexbar_bridge.py" "$@"
+fi

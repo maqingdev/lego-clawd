@@ -9,6 +9,7 @@ class ServoArm {
   void begin();
   void setActivity(AiActivity activity);
   void setCalibrationPulse(int pulseUs);
+  void setPendingWaveConfig(int forwardPulseUs, uint32_t pauseMs);
   void setWaitingForInput(bool waiting);
   void update();
   bool attached() const { return attached_; }
@@ -19,6 +20,8 @@ class ServoArm {
   int currentPulseUs_ = 0;
   int targetPulseUs_ = 0;
   int stepPulseUs_ = Config::ServoStepPulseUs;
+  int pendingWaveForwardPulseUs_ = Config::ServoPendingWaveForwardPulseUs;
+  uint32_t pendingWavePauseMs_ = Config::ServoPendingWavePauseMs;
   bool workSwingForward_ = true;
   bool pendingWaveForward_ = true;
   uint8_t workMovesRemaining_ = 0;

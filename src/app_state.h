@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "config.h"
 
 struct UsageWindow {
   uint8_t remainingPercent = 100;
@@ -22,6 +23,8 @@ struct AppState {
   bool selfTestRequested = false;
   int16_t idleInSeconds = -1;
   int16_t servoPulseUs = -1;
+  int16_t pendingWaveForwardPulseUs = Config::ServoPendingWaveForwardPulseUs;
+  uint16_t pendingWavePauseMs = Config::ServoPendingWavePauseMs;
   uint32_t lastUpdateMs = 0;
 };
 

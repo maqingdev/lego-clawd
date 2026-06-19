@@ -21,6 +21,7 @@ class DisplayUi {
   bool begin();
   void renderFace(EyeExpression expression, const AppState &state);
   void renderWorkingBrows(EyeExpression expression);
+  void renderPendingAttention(bool active);
   void renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
                           AiActivity activity, int16_t idleInSeconds);
 
@@ -32,6 +33,8 @@ class DisplayUi {
   void clearWorkingBrow(int16_t x, int16_t y, int16_t w);
   void drawWorkingBrow(int16_t x, int16_t y, int16_t w, EyeExpression expression,
                        bool leftEye);
+  void clearApprovalMarks();
+  void drawApprovalMarks();
   void drawDozeMarks();
   void drawFooter(const AppState &state);
   void drawDebugState(AiActivity activity, int16_t idleInSeconds);

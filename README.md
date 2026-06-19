@@ -79,7 +79,7 @@ Current state mapping:
 ```text
 idle      -> 2200us resting pose, down and slightly forward
 working   -> slow sweep from 1600us to 1750us around the forward pose
-pending   -> 1000us raised hand
+pending   -> wave between 1000us and 1150us for approval requests
 waiting   -> 1000us raised hand
 waiting -> idle lowers the arm back to 2200us
 ```
@@ -121,6 +121,9 @@ Supported keys:
 - `aiState` or `state`: `idle`, `working`, `pending`, or `waiting`
 - `waiting` or `aiWaitingForInput`: legacy boolean; `true` maps to `waiting`
 - `servoPulseUs`: manual servo calibration override
+- `pendingWaveForwardPulseUs` or `pendingWavePulseUs`: temporary pending wave
+  forward endpoint override
+- `pendingWavePauseMs`: temporary pending wave endpoint pause override
 - `selfTest`: when `true`, runs the end-to-end firmware self-test
 
 Activity behavior:
@@ -129,8 +132,8 @@ Activity behavior:
 |---|---|---|
 | `idle` | face animations and occasional usage peeks | resting pose |
 | `working` | focused eyes, low-frequency blink, brow animation | slow front sweep |
-| `pending` | wide eyes for approval request | raised hand |
-| `waiting` | complete and waiting for user input | raised hand, then usage peek |
+| `pending` | wide eyes, animated attention mark, and `APPROVAL` label | raised hand with a short wave |
+| `waiting` | `DONE` label, then usage peek | raised hand |
 
 The usage screen is firmware-timed. The bridge only updates cached usage data
 over serial.
@@ -168,8 +171,24 @@ If the status file is stale for more than 60 seconds, the bridge falls back to
 Useful bridge checks:
 
 ```sh
+./tools/run-bridge.sh --help
+./tools/run-bridge.sh --list-states
 ./tools/run-bridge.sh --dry-run --once
+./tools/run-bridge.sh --once --state pending
+./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test
+```
+
+Use `--state idle|working|pending|waiting` to force one activity. `approval`
+is accepted as an alias for `pending`, and `done` is accepted as an alias for
+`waiting`. `--approval-test SECONDS` sends `pending`, holds for the requested
+time, then sends `idle`.
+
+Pending wave tuning can be sent without recompiling:
+
+```sh
+./tools/run-bridge.sh --once --state pending --pending-wave-forward-pulse-us 1150
+./tools/run-bridge.sh --approval-test 15 --pending-wave-forward-pulse-us 1125 --pending-wave-pause-ms 300
 ```
 
 `--self-test` reads the latest CodexBar usage first, then sends that usage data

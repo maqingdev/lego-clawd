@@ -25,6 +25,7 @@ constexpr uint32_t IdleSleepDelayMs = 45000;
 constexpr uint32_t WorkingBlinkIntervalMinMs = 12000;
 constexpr uint32_t WorkingBlinkIntervalMaxMs = 22000;
 constexpr uint32_t WorkingStrainIntervalMs = 900;
+constexpr uint32_t PendingAttentionIntervalMs = 700;
 constexpr uint32_t BlinkMs = 120;
 
 constexpr int ServoSignalPin = 42;

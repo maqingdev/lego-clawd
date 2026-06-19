@@ -17,8 +17,10 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - `idle`: face animations, occasional usage peeks, servo resting pose.
 - `working`: focused eyes, low-frequency blink, local-only brow animation,
   servo slow front sweep.
-- `pending`: approval requested, wide eyes, servo raised.
-- `waiting`: task complete and waiting for user input, servo raised.
+- `pending`: approval requested, wide eyes with animated attention mark and
+  `APPROVAL` label, servo raised with short wave.
+- `waiting`: task complete and waiting for user input, `DONE` label, servo
+  raised.
 - Usage screen is firmware-timed; bridge only updates cached data over serial.
 
 ## Servo
@@ -31,13 +33,19 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - Current state mapping:
   - `idle`: `2200us`
   - `working`: slow sweep from `1600us` to `1750us`
-  - `pending`: `1000us`
+  - `pending`: wave between `1000us` and `1150us`
   - `waiting`: `1000us`
 - Servo commands use pulse widths, not degree angles.
 - Manual calibration JSON:
 
 ```json
 {"servoPulseUs":1675}
+```
+
+- Runtime pending wave tuning JSON:
+
+```json
+{"pendingWaveForwardPulseUs":1150,"pendingWavePauseMs":300}
 ```
 
 - Servo-only PlatformIO environment: `servo_gpio42_test`.
@@ -77,6 +85,14 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 ```
 
 This sends latest usage data and `selfTest: true`.
+- Useful bridge discovery/test commands:
+
+```sh
+./tools/run-bridge.sh --help
+./tools/run-bridge.sh --list-states
+./tools/run-bridge.sh --once --state pending
+./tools/run-bridge.sh --approval-test 15
+```
 
 ## Firmware Self-Test
 
@@ -105,6 +121,9 @@ idle -> working -> pending -> waiting -> usage screen -> idle
 ~/.platformio/penv/bin/pio run -t upload --upload-port /dev/cu.usbmodem101
 ~/.platformio/penv/bin/pio run -e servo_gpio42_test -t upload --upload-port /dev/cu.usbmodem101
 ./tools/run-bridge.sh --dry-run --once
+./tools/run-bridge.sh --list-states
+./tools/run-bridge.sh --once --state pending
+./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test
 ```
 

@@ -78,6 +78,22 @@ void ServoArm::setCalibrationPulse(int pulseUs) {
   Serial.println(targetPulseUs_);
 }
 
+void ServoArm::setPendingWaveConfig(int forwardPulseUs, uint32_t pauseMs) {
+  pendingWaveForwardPulseUs_ = constrain(forwardPulseUs,
+                                         Config::ServoMinPulseUs,
+                                         Config::ServoMaxPulseUs);
+  pendingWavePauseMs_ = pauseMs;
+
+  if (activity_ == AiActivity::Pending && targetPulseUs_ != Config::ServoRaisedPulseUs) {
+    setTargetPulse(pendingWaveForwardPulseUs_);
+  }
+
+  Serial.print("pending wave forward pulse us: ");
+  Serial.println(pendingWaveForwardPulseUs_);
+  Serial.print("pending wave pause ms: ");
+  Serial.println(pendingWavePauseMs_);
+}
+
 void ServoArm::update() {
   if (!attached_) {
     return;
@@ -120,7 +136,7 @@ void ServoArm::updatePendingTarget(uint32_t now) {
   }
 
   if (holdUntilMs_ == 0) {
-    holdUntilMs_ = now + Config::ServoPendingWavePauseMs;
+    holdUntilMs_ = now + pendingWavePauseMs_;
     return;
   }
   if (static_cast<int32_t>(now - holdUntilMs_) < 0) {
@@ -130,7 +146,7 @@ void ServoArm::updatePendingTarget(uint32_t now) {
   holdUntilMs_ = 0;
   setMotionSpeed(Config::ServoPendingWaveStepPulseUs,
                  Config::ServoPendingWaveStepMs);
-  setTargetPulse(pendingWaveForward_ ? Config::ServoPendingWaveForwardPulseUs
+  setTargetPulse(pendingWaveForward_ ? pendingWaveForwardPulseUs_
                                      : Config::ServoRaisedPulseUs);
   pendingWaveForward_ = !pendingWaveForward_;
 }

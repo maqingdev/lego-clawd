@@ -1,6 +1,7 @@
 #include "usage_data.h"
 
 #include <ArduinoJson.h>
+#include "config.h"
 
 void UsageData::begin(AppState &state) {
   state.codex5h.remainingPercent = 76;
@@ -43,7 +44,7 @@ bool UsageData::readSerialUpdate(Stream &stream, AppState &state) {
 }
 
 bool UsageData::applyJsonLine(const String &line, AppState &state) {
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<768> doc;
   const DeserializationError error = deserializeJson(doc, line);
   if (error) {
     Serial.print("usage json parse failed: ");
@@ -93,6 +94,22 @@ bool UsageData::applyJsonLine(const String &line, AppState &state) {
     state.servoPulseUs = constrain(doc["servoPulseUs"].as<int>(), 500, 2500);
   } else {
     state.servoPulseUs = -1;
+  }
+
+  if (doc["pendingWaveForwardPulseUs"].is<int>()) {
+    state.pendingWaveForwardPulseUs = constrain(
+        doc["pendingWaveForwardPulseUs"].as<int>(),
+        Config::ServoMinPulseUs,
+        Config::ServoMaxPulseUs);
+  } else if (doc["pendingWavePulseUs"].is<int>()) {
+    state.pendingWaveForwardPulseUs = constrain(
+        doc["pendingWavePulseUs"].as<int>(),
+        Config::ServoMinPulseUs,
+        Config::ServoMaxPulseUs);
+  }
+
+  if (doc["pendingWavePauseMs"].is<int>()) {
+    state.pendingWavePauseMs = constrain(doc["pendingWavePauseMs"].as<int>(), 0, 2000);
   }
 
   if (doc["selfTest"].is<bool>() && doc["selfTest"].as<bool>()) {
