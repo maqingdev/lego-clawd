@@ -14,6 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let connectionItem = NSMenuItem(title: "Serial: checking...", action: nil, keyEquivalent: "")
     private let aiStateItem = NSMenuItem(title: "State: unknown", action: nil, keyEquivalent: "")
     private let lastActionItem = NSMenuItem(title: "Last: none", action: nil, keyEquivalent: "")
+    private let connectBridgeItem = NSMenuItem(title: "Connect Bridge", action: nil, keyEquivalent: "c")
+    private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Bridge", action: nil, keyEquivalent: "d")
+    private let testIdleItem = NSMenuItem(title: "Test Idle", action: nil, keyEquivalent: "1")
+    private let testWorkingItem = NSMenuItem(title: "Test Working", action: nil, keyEquivalent: "2")
+    private let testApprovalItem = NSMenuItem(title: "Test Approval", action: nil, keyEquivalent: "3")
+    private let testDoneItem = NSMenuItem(title: "Test Done", action: nil, keyEquivalent: "4")
+    private let approvalTestItem = NSMenuItem(title: "Approval Test 10s", action: nil, keyEquivalent: "a")
+    private let selfTestItem = NSMenuItem(title: "Self-Test", action: nil, keyEquivalent: "s")
+
+    private var testItems: [NSMenuItem] {
+        [testIdleItem, testWorkingItem, testApprovalItem, testDoneItem, approvalTestItem, selfTestItem]
+    }
 
     static func main() {
         let app = NSApplication.shared
@@ -53,17 +65,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         menu.addItem(groupHeader("Actions"))
-        menu.addItem(NSMenuItem(title: "Connect Bridge", action: #selector(connectBridge), keyEquivalent: "c"))
-        menu.addItem(NSMenuItem(title: "Disconnect Bridge", action: #selector(disconnectBridge), keyEquivalent: "d"))
+        menu.addItem(connectBridgeItem)
+        menu.addItem(disconnectBridgeItem)
         menu.addItem(.separator())
 
         menu.addItem(groupHeader("Test"))
-        menu.addItem(NSMenuItem(title: "Test Idle", action: #selector(testIdle), keyEquivalent: "1"))
-        menu.addItem(NSMenuItem(title: "Test Working", action: #selector(testWorking), keyEquivalent: "2"))
-        menu.addItem(NSMenuItem(title: "Test Approval", action: #selector(testApproval), keyEquivalent: "3"))
-        menu.addItem(NSMenuItem(title: "Test Done", action: #selector(testDone), keyEquivalent: "4"))
-        menu.addItem(NSMenuItem(title: "Approval Test 10s", action: #selector(approvalTest), keyEquivalent: "a"))
-        menu.addItem(NSMenuItem(title: "Self-Test", action: #selector(selfTest), keyEquivalent: "s"))
+        menu.addItem(testIdleItem)
+        menu.addItem(testWorkingItem)
+        menu.addItem(testApprovalItem)
+        menu.addItem(testDoneItem)
+        menu.addItem(approvalTestItem)
+        menu.addItem(selfTestItem)
         menu.addItem(.separator())
 
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
@@ -73,9 +85,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bridgeItem.target = self
         bridgeItem.action = #selector(toggleBridge)
         bridgeItem.toolTip = "Toggle bridge connection"
+        connectBridgeItem.action = #selector(connectBridge)
+        disconnectBridgeItem.action = #selector(disconnectBridge)
+        testIdleItem.action = #selector(testIdle)
+        testWorkingItem.action = #selector(testWorking)
+        testApprovalItem.action = #selector(testApproval)
+        testDoneItem.action = #selector(testDone)
+        approvalTestItem.action = #selector(approvalTest)
+        selfTestItem.action = #selector(selfTest)
 
         [connectionItem, aiStateItem, lastActionItem].forEach { item in
-            item.isEnabled = true
+            item.isEnabled = false
             item.target = nil
             item.action = nil
         }
@@ -102,11 +122,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             statusItem.button?.attributedTitle = fallbackStatusTitle(snapshot)
         }
+        bridgeItem.isEnabled = snapshot.isConnected || snapshot.bridgeRunning
+        connectBridgeItem.isEnabled = snapshot.isConnected && !snapshot.bridgeRunning
+        disconnectBridgeItem.isEnabled = snapshot.bridgeRunning
+        testItems.forEach { $0.isEnabled = snapshot.isConnected }
         bridgeItem.attributedTitle = menuStatusTitle(
             dot: snapshot.bridgeRunning ? "●" : "●",
-            dotColor: snapshot.bridgeRunning ? .systemGreen : .systemRed,
+            dotColor: bridgeDotColor(snapshot),
             label: "Bridge",
-            value: snapshot.bridgeText
+            value: snapshot.bridgeText,
+            textColor: bridgeItem.isEnabled ? .labelColor : .secondaryLabelColor
         )
         connectionItem.title = "Serial: \(snapshot.connectionText)"
         aiStateItem.title = "State: \(snapshot.aiState)"
@@ -138,7 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else if snapshot.isConnected {
             dotColor = .systemOrange
         } else {
-            dotColor = .systemRed
+            dotColor = .systemGray
         }
         title.append(NSAttributedString(
             string: "●",
@@ -147,10 +172,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return title
     }
 
-    private func menuStatusTitle(dot: String, dotColor: NSColor, label: String, value: String) -> NSAttributedString {
+    private func menuStatusTitle(
+        dot: String,
+        dotColor: NSColor,
+        label: String,
+        value: String,
+        textColor: NSColor = .labelColor
+    ) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let textAttributes: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor.labelColor,
+            .foregroundColor: textColor,
             .font: NSFont.menuFont(ofSize: NSFont.systemFontSize)
         ]
         result.append(NSAttributedString(
@@ -166,6 +197,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             attributes: textAttributes
         ))
         return result
+    }
+
+    private func bridgeDotColor(_ snapshot: StatusSnapshot) -> NSColor {
+        if snapshot.bridgeRunning {
+            return .systemGreen
+        }
+        return snapshot.isConnected ? .systemRed : .systemGray
     }
 
     private func runAction(_ name: String, _ action: @escaping () -> Void) {
@@ -278,7 +316,7 @@ final class LegoClawdController {
         let ports = serialPorts()
         let state = readAIState()
         let bridgeRunning = isBridgeRunning()
-        let portText = ports.isEmpty ? "disconnected" : ports.joined(separator: ", ")
+        let portText = ports.isEmpty ? "no serial device" : ports.joined(separator: ", ")
         return StatusSnapshot(
             isConnected: !ports.isEmpty,
             bridgeRunning: bridgeRunning,
