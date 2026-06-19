@@ -112,9 +112,10 @@ Quiet mode is saved on the board; send `{"quietMode":false}` to turn it off.
 It shows connection, AI state, and bridge status; can toggle quiet mode; can test
 idle/working/approval/done/error/self-test; and can disconnect bridge to release
 serial for flashing. A user-initiated menu disconnect sends one final
-`disconnected` state before leaving the bridge stopped. Only the explicit Quiet
-Mode menu action sends `quietMode:true/false`; normal connect/test/disconnect
-commands preserve the board's stored quiet state.
+`disconnected` state before leaving the bridge stopped. Menu app actions send
+the menu's current `quietMode:true/false` explicitly. For manual Codex/CLI
+commands, omit `--quiet-mode` unless the user explicitly asks to change the
+board's stored quiet setting; never send `--quiet-mode false` casually.
 - Codex hooks are installed by `tools/install_codex_hooks.py`; hook script is
   `tools/codex_status_hook.py`.
 - `PermissionRequest` must map to `pending`, not `waiting`.

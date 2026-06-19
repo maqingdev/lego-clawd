@@ -212,11 +212,13 @@ Menu actions:
 
 `Disconnect Bridge` stops the background bridge, sends one final `disconnected`
 state to the board, and leaves serial released.
-Only the `Quiet Mode` menu action sends `quietMode:true/false`; other menu
-actions leave the board's persisted quiet setting unchanged.
+Menu actions send the menu bar app's current quiet setting explicitly so Connect,
+Disconnect, and tests stay aligned with the menu state. For CLI/Codex commands,
+omit `--quiet-mode` unless you explicitly want to change the board's stored
+quiet setting.
 `Test Approval` holds approval for 6 seconds, then returns the firmware to idle.
 When tests run while bridge is active, the app pauses bridge, sends the test, and
-restarts bridge without changing quiet mode.
+restarts bridge with the menu's current quiet setting.
 
 The app uses the repo root from `LEGO_CLAWD_PROJECT_ROOT` when present. If the
 environment variable is not set, it falls back to this iCloud project path:

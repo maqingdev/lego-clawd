@@ -368,7 +368,7 @@ final class LegoClawdController {
     func startBridge() {
         let result = runCommand(
             bridgePython.path,
-            [bridgeControl.path, "start"],
+            [bridgeControl.path, "start"] + quietModeArguments(),
             timeout: 8
         )
         if result != 0 {
@@ -383,7 +383,7 @@ final class LegoClawdController {
         if notifyDevice && !serialPorts().isEmpty {
             let result = runCommand(
                 bridgeScript.path,
-                ["--once", "--state", "disconnected"],
+                ["--once", "--state", "disconnected"] + quietModeArguments(),
                 timeout: 15
             )
             lastAction = result == 0 ? "Disconnect: device notified" : "Disconnect: serial released"
@@ -396,7 +396,7 @@ final class LegoClawdController {
         runWithBridgePaused(label: "State \(state)") {
             _ = self.runCommand(
                 self.bridgeScript.path,
-                ["--once", "--state", state],
+                ["--once", "--state", state] + self.quietModeArguments(),
                 timeout: 15
             )
         }
@@ -416,7 +416,7 @@ final class LegoClawdController {
         runWithBridgePaused(label: "Approval test") {
             _ = self.runCommand(
                 self.bridgeScript.path,
-                ["--approval-test", "\(seconds)"],
+                ["--approval-test", "\(seconds)"] + self.quietModeArguments(),
                 timeout: seconds + 15
             )
         }
@@ -426,10 +426,14 @@ final class LegoClawdController {
         runWithBridgePaused(label: "Self-test") {
             _ = self.runCommand(
                 self.bridgeScript.path,
-                ["--once", "--self-test"],
+                ["--once", "--self-test"] + self.quietModeArguments(),
                 timeout: 20
             )
         }
+    }
+
+    private func quietModeArguments() -> [String] {
+        ["--quiet-mode", quietMode ? "true" : "false"]
     }
 
     private func runWithBridgePaused(label: String, action: () -> Void) {
