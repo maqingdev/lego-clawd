@@ -233,14 +233,17 @@ void DisplayUi::drawDisconnectedFace() {
   gfx->fillRoundRect(42, 78, 58, 10, 4, Black);
   gfx->fillRoundRect(220, 78, 58, 10, 4, Black);
 
-  gfx->drawRoundRect(130, 58, 34, 24, 4, Black);
-  gfx->drawRoundRect(156, 88, 34, 24, 4, Black);
+  const uint16_t bg = faceBackground();
   for (int i = 0; i < 3; ++i) {
-    gfx->drawLine(164 + i, 82, 156 + i, 88, Black);
-    gfx->drawLine(168 + i, 85, 160 + i, 91, Black);
+    gfx->drawRoundRect(106 + i, 66 + i, 62 - i * 2, 38 - i * 2, 10, Black);
+    gfx->drawRoundRect(152 + i, 66 + i, 62 - i * 2, 38 - i * 2, 10, Black);
   }
-
-  gfx->fillRoundRect(138, 122, 44, 8, 4, Black);
+  gfx->fillRect(154, 68, 12, 34, bg);
+  gfx->fillRect(154, 75, 12, 20, bg);
+  for (int i = 0; i < 3; ++i) {
+    gfx->drawLine(151 + i, 78, 143 + i, 88, Black);
+    gfx->drawLine(169 + i, 82, 177 + i, 72, Black);
+  }
 }
 
 void DisplayUi::drawUsageCuePanel() {
