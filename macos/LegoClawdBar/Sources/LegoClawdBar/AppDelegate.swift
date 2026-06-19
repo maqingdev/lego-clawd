@@ -31,17 +31,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
-        app.setActivationPolicy(.accessory)
         app.run()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenu()
         refreshStatus()
+        showLaunchDockCue()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshStatus()
             }
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        statusItem.button?.performClick(nil)
+        return false
+    }
+
+    private func showLaunchDockCue() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.requestUserAttention(.informationalRequest)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 
@@ -277,7 +290,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() {
-        controller.stopBridge()
         NSApplication.shared.terminate(nil)
     }
 }
