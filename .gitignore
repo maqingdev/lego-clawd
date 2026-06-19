@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 .lego-clawd/
+.DS_Store
+macos/LegoClawdBar/.build/
+macos/LegoClawdBar/Sources/LegoClawdBar/Resources/AppIcon.iconset/
+macos/build/

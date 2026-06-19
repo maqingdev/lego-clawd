@@ -75,6 +75,16 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 ~/.lego-clawd/ai-status.json
 ```
 
+- macOS menu bar app:
+
+```sh
+./tools/run-menu-bar.sh
+./tools/build-menu-bar-app.sh
+```
+
+It shows connection, AI state, and bridge status; can test idle/working/approval
+/done/self-test; can disconnect bridge to release serial for flashing; and can
+flash firmware then reconnect bridge when enabled.
 - Codex hooks are installed by `tools/install_codex_hooks.py`; hook script is
   `tools/codex_status_hook.py`.
 - `PermissionRequest` must map to `pending`, not `waiting`.
@@ -125,6 +135,8 @@ idle -> working -> pending -> waiting -> usage screen -> idle
 ./tools/run-bridge.sh --once --state pending
 ./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test
+./tools/run-menu-bar.sh
+./tools/build-menu-bar-app.sh
 ```
 
 If upload fails, check whether the bridge owns the serial port:

@@ -165,6 +165,48 @@ The bridge reads AI state from:
 ~/.lego-clawd/ai-status.json
 ```
 
+## macOS Menu Bar App
+
+A lightweight native menu bar controller is available under
+`macos/LegoClawdBar`. It shows board connection, AI state, and bridge status,
+and can run common hardware actions without opening a terminal.
+
+Run from source:
+
+```sh
+./tools/run-menu-bar.sh
+```
+
+Build a double-clickable app bundle:
+
+```sh
+./tools/build-menu-bar-app.sh
+```
+
+The app bundle is written to:
+
+```text
+macos/build/Lego Clawd Bar.app
+```
+
+Menu actions:
+
+- Connect Bridge / Disconnect Bridge
+- Release Serial for Flashing
+- Test Idle, Working, Approval, and Done
+- Approval Test 10s
+- Firmware Self-Test
+- Flash Firmware, which disconnects the bridge first and reconnects afterward
+  when `Reconnect After Flash` is enabled
+- Open Bridge Log
+
+The app uses the repo root from `LEGO_CLAWD_PROJECT_ROOT` when present. If the
+environment variable is not set, it falls back to this iCloud project path:
+
+```text
+~/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd
+```
+
 If the status file is stale for more than 60 seconds, the bridge falls back to
 `idle`. Use `--idle-timeout 0` to disable that fallback.
 
