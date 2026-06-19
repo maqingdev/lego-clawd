@@ -14,6 +14,7 @@ enum class AiActivity : uint8_t {
   Pending,
   Waiting,
   Error,
+  Disconnected,
 };
 
 struct AppState {

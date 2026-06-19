@@ -83,6 +83,8 @@ working   -> slow sweep from 1600us to 1750us around the forward pose
 pending   -> wave between 1000us and 1150us for approval requests
 waiting   -> 1000us raised hand
 waiting -> idle lowers the arm back to 2200us
+error     -> 2200us resting pose
+disconnected -> 2200us resting pose
 ```
 
 Manual calibration over serial:
@@ -119,7 +121,8 @@ Supported keys:
 - `codex1w` or `oneWeekRemainingPct`: remaining 1-week quota percent
 - `reset5h` or `fiveHourResetAt`: display text for 5-hour reset
 - `reset1w` or `oneWeekResetAt`: display text for 1-week reset
-- `aiState` or `state`: `idle`, `working`, `pending`, `waiting`, or `error`
+- `aiState` or `state`: `idle`, `working`, `pending`, `waiting`, `error`, or
+  `disconnected`
 - `waiting` or `aiWaitingForInput`: legacy boolean; `true` maps to `waiting`
 - `servoPulseUs`: manual servo calibration override
 - `pendingWaveForwardPulseUs` or `pendingWavePulseUs`: temporary pending wave
@@ -136,7 +139,8 @@ Activity behavior:
 | `working` | focused eyes, low-frequency blink, brow animation, elapsed/deep-work footer | slow front sweep |
 | `pending` | wide eyes, animated attention mark, and `APPROVAL` label | raised hand with a short wave |
 | `waiting` | `DONE` label, then usage peek | raised hand |
-| `error` | red error face with X eyes | resting pose |
+| `error` | normal orange face with X eyes | resting pose |
+| `disconnected` | low eyes with a broken-link mark and `DISCONNECTED` label | resting pose |
 
 When `quietMode` is true, the LCD still reflects the current state with a small
 quiet icon in the footer. The servo suppresses activity motion and moves quickly
@@ -144,7 +148,9 @@ to a lower/back resting pose. Quiet mode is persisted on the ESP32 and restored
 after reset until `quietMode:false` is received.
 
 The usage screen is firmware-timed. The bridge only updates cached usage data
-over serial.
+over serial. If the firmware does not receive a serial update for 8 seconds, it
+switches to `disconnected`; the bridge sends a 3-second heartbeat while running
+so a stable unchanged state does not look disconnected.
 
 ## Host Bridge
 
@@ -226,12 +232,13 @@ Useful bridge checks:
 ./tools/run-bridge.sh --dry-run --once
 ./tools/run-bridge.sh --once --state pending
 ./tools/run-bridge.sh --once --state error
+./tools/run-bridge.sh --once --state disconnected
 ./tools/run-bridge.sh --once --quiet-mode true
 ./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test
 ```
 
-Use `--state idle|working|pending|waiting|error` to force one activity.
+Use `--state idle|working|pending|waiting|error|disconnected` to force one activity.
 `approval` is accepted as an alias for `pending`, and `done` is accepted as an
 alias for `waiting`. `--approval-test SECONDS` sends `pending`, holds for the
 requested time, then sends `idle`.

@@ -70,6 +70,7 @@ void ServoArm::applyActivityTarget() {
       setTargetPulse(Config::ServoRaisedPulseUs);
       break;
     case AiActivity::Error:
+    case AiActivity::Disconnected:
       setMotionSpeed(Config::ServoIdleStepPulseUs, Config::ServoIdleStepMs);
       setTargetPulse(Config::ServoDownPulseUs);
       break;

@@ -18,7 +18,7 @@ DEFAULT_USAGE_FILE = (
     / "Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json"
 )
 DEFAULT_AI_STATUS_FILE = Path.home() / ".lego-clawd/ai-status.json"
-ACTIVITIES = ("idle", "working", "pending", "waiting", "error")
+ACTIVITIES = ("idle", "working", "pending", "waiting", "error", "disconnected")
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,13 +40,20 @@ def parse_args() -> argparse.Namespace:
         default=60.0,
         help="Seconds between Codex usage file refreshes.",
     )
+    parser.add_argument(
+        "--heartbeat-interval",
+        type=float,
+        default=3.0,
+        help="Seconds between repeated serial updates when payload is unchanged.",
+    )
     parser.add_argument("--interval", type=float, help=argparse.SUPPRESS)
     parser.add_argument("--log-file", type=Path, help="Append bridge logs to this file.")
     parser.add_argument("--once", action="store_true", help="Send/read once and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Print JSON without serial.")
     parser.add_argument(
         "--state",
-        choices=("idle", "working", "pending", "approval", "waiting", "done", "error"),
+        choices=("idle", "working", "pending", "approval", "waiting", "done", "error",
+                 "disconnected", "offline"),
         help="Override AI state. 'approval' is pending; 'done' is waiting.",
     )
     parser.add_argument(
@@ -184,8 +191,10 @@ def normalize_activity(value: Any, waiting: Any = None, pending: Any = None,
             return "pending"
         if text in {"waiting", "waiting_input", "done"}:
             return "waiting"
-        if text in {"error", "err", "lost", "fault"}:
+        if text in {"error", "err", "fault"}:
             return "error"
+        if text in {"disconnected", "offline", "no_link", "lost"}:
+            return "disconnected"
 
     if isinstance(waiting, bool):
         return "waiting" if waiting else "idle"
@@ -200,6 +209,7 @@ def print_supported_states() -> None:
     print("aliases:")
     print("  approval -> pending")
     print("  done     -> waiting")
+    print("  offline  -> disconnected")
 
 
 def status_is_stale(status: dict[str, Any], timeout_seconds: float) -> bool:
@@ -367,6 +377,7 @@ def main() -> int:
     usage_payload: dict[str, Any] | None = None
     last_sent_payload: dict[str, Any] | None = None
     last_usage_refresh = 0.0
+    last_sent_at = 0.0
 
     def send_payload(payload: dict[str, Any]) -> None:
         line = json.dumps(payload, separators=(",", ":"))
@@ -423,6 +434,10 @@ def main() -> int:
             if args.once or payload != last_sent_payload:
                 send_payload(payload)
                 last_sent_payload = dict(payload)
+                last_sent_at = now
+            elif args.heartbeat_interval > 0 and now - last_sent_at >= args.heartbeat_interval:
+                send_payload(payload)
+                last_sent_at = now
 
             if args.once:
                 return 0

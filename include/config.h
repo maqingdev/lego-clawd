@@ -20,6 +20,7 @@ constexpr uint32_t UsagePeekIntervalMs = 30000;
 constexpr uint32_t UsagePeekCueMs = 1600;
 constexpr uint32_t UsagePeekDurationMs = 5000;
 constexpr uint32_t WaitingUsagePeekDelayMs = 5000;
+constexpr uint32_t SerialDisconnectTimeoutMs = 8000;
 constexpr uint32_t EyeExpressionIntervalMinMs = 6500;
 constexpr uint32_t EyeExpressionIntervalMaxMs = 12000;
 constexpr uint32_t IdleSleepDelayMs = 45000;

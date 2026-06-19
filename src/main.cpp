@@ -49,6 +49,7 @@ constexpr SelfTestStep SelfTestSteps[] = {
     {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 7000},
     {AiActivity::Waiting, ScreenMode::Face, EyeExpression::Neutral, 2000},
     {AiActivity::Error, ScreenMode::Face, EyeExpression::Neutral, 2500},
+    {AiActivity::Disconnected, ScreenMode::Face, EyeExpression::Neutral, 2500},
     {AiActivity::Waiting, ScreenMode::UsageCue, EyeExpression::LookRight, 1600},
     {AiActivity::Waiting, ScreenMode::Usage, EyeExpression::Neutral, 4000},
     {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 3000},
@@ -263,6 +264,15 @@ void updateFaceExpression(uint32_t now) {
     return;
   }
 
+  if (state.aiActivity == AiActivity::Disconnected) {
+    if (eyeExpression != EyeExpression::Neutral) {
+      eyeExpression = EyeExpression::Neutral;
+      blinkUntilMs = 0;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
   if (eyeExpression == EyeExpression::Focused || eyeExpression == EyeExpression::Strain ||
       eyeExpression == EyeExpression::Wide ||
       (!idleCanSleep(now) && (eyeExpression == EyeExpression::Sleepy ||
@@ -336,11 +346,17 @@ void handleActivityTransition(AiActivity previousActivity, AiActivity currentAct
     pendingAttentionActive = false;
     nextPendingAttentionMs = 0;
     eyeExpression = EyeExpression::Neutral;
+  } else if (currentActivity == AiActivity::Disconnected) {
+    pendingAttentionActive = false;
+    nextPendingAttentionMs = 0;
+    eyeExpression = EyeExpression::Neutral;
   }
 }
 
 void updateActivityElapsed(uint32_t now) {
-  if (state.aiActivity == AiActivity::Idle || selfTestActive || activityStartedMs == 0) {
+  if (state.aiActivity == AiActivity::Idle ||
+      state.aiActivity == AiActivity::Disconnected ||
+      selfTestActive || activityStartedMs == 0) {
     return;
   }
 
@@ -410,6 +426,7 @@ void updateSelfTest(uint32_t now) {
     state.aiWaitingForInput = false;
     state.activityElapsedSeconds = -1;
     state.servoPulseUs = -1;
+    state.lastUpdateMs = now;
     screen = ScreenMode::Face;
     eyeExpression = EyeExpression::Neutral;
     idleStartedMs = now;
@@ -424,6 +441,32 @@ void updateSelfTest(uint32_t now) {
 
   selfTestStepStartedMs = now;
   applySelfTestStep();
+}
+
+void updateConnectionState(uint32_t now) {
+  if (selfTestActive || state.servoPulseUs >= 0) {
+    return;
+  }
+
+  if (state.aiActivity == AiActivity::Disconnected) {
+    return;
+  }
+
+  if (now - state.lastUpdateMs < Config::SerialDisconnectTimeoutMs) {
+    return;
+  }
+
+  const AiActivity previousActivity = state.aiActivity;
+  state.aiActivity = AiActivity::Disconnected;
+  state.aiWaitingForInput = false;
+  state.idleInSeconds = -1;
+  state.activityElapsedSeconds = -1;
+  state.servoPulseUs = -1;
+  waitingUsagePeekAtMs = 0;
+  handleActivityTransition(previousActivity, state.aiActivity, now);
+  servoArm.setActivity(state.aiActivity);
+  screen = ScreenMode::Face;
+  renderCurrentScreen();
 }
 
 }
@@ -493,6 +536,7 @@ void loop() {
     }
   }
 
+  updateConnectionState(now);
   updateSelfTest(now);
   updateScreenSchedule(now);
   updateActivityElapsed(now);

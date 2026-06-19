@@ -14,7 +14,8 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - Servo motion: `src/servo_arm.*`.
 - Persistent board settings: `src/persistent_settings.*`.
 - Shared state: `src/app_state.h`.
-- Activity states: `idle`, `working`, `pending`, `waiting`, and `error`.
+- Activity states: `idle`, `working`, `pending`, `waiting`, `error`, and
+  `disconnected`.
 - `idle`: face animations, a visible mini usage cue before occasional usage
   peeks, servo resting pose.
 - `working`: focused eyes, low-frequency blink, local-only brow animation,
@@ -25,6 +26,9 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
   raised.
 - `error`: normal orange face background with X eyes and `ERROR` footer, servo
   resting pose.
+- `disconnected`: low eyes with a broken-link mark and `DISCONNECTED` footer,
+  servo resting pose. Firmware enters this state after 8 seconds without serial
+  updates; the bridge sends a 3-second heartbeat while running.
 - `quietMode`: keeps LCD state updates active, shows only a small quiet icon in
   the footer, suppresses servo activity, and moves the arm quickly to `2300us`.
   It is persisted on the ESP32 with Preferences/NVS and restored after reset.
@@ -49,6 +53,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
   - `pending`: wave between `1000us` and `1150us`
   - `waiting`: `1000us`
   - `error`: `2200us`
+  - `disconnected`: `2200us`
 - Quiet mode JSON:
 
 ```json
@@ -124,6 +129,7 @@ This sends latest usage data and `selfTest: true`.
 ./tools/run-bridge.sh --list-states
 ./tools/run-bridge.sh --once --state pending
 ./tools/run-bridge.sh --once --state error
+./tools/run-bridge.sh --once --state disconnected
 ./tools/run-bridge.sh --once --quiet-mode true
 ./tools/run-bridge.sh --approval-test 15
 ```
@@ -145,7 +151,7 @@ Preferred command, because it includes latest usage data:
 Sequence:
 
 ```text
-idle -> working -> pending -> waiting -> error -> usage screen -> idle
+idle -> working -> pending -> waiting -> error -> disconnected -> usage screen -> idle
 ```
 
 ## Common Commands
@@ -158,6 +164,7 @@ idle -> working -> pending -> waiting -> error -> usage screen -> idle
 ./tools/run-bridge.sh --list-states
 ./tools/run-bridge.sh --once --state pending
 ./tools/run-bridge.sh --once --state error
+./tools/run-bridge.sh --once --state disconnected
 ./tools/run-bridge.sh --once --quiet-mode true
 ./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test

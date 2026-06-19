@@ -162,8 +162,12 @@ AiActivity UsageData::activityFromText(const char *value, AiActivity fallback) {
       text == "done") {
     return AiActivity::Waiting;
   }
-  if (text == "error" || text == "err" || text == "lost" || text == "fault") {
+  if (text == "error" || text == "err" || text == "fault") {
     return AiActivity::Error;
+  }
+  if (text == "disconnected" || text == "offline" || text == "no_link" ||
+      text == "lost") {
+    return AiActivity::Disconnected;
   }
 
   return fallback;

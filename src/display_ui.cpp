@@ -47,6 +47,12 @@ void DisplayUi::renderFace(EyeExpression expression, const AppState &state) {
     return;
   }
 
+  if (state.aiActivity == AiActivity::Disconnected) {
+    drawDisconnectedFace();
+    drawFooter(state);
+    return;
+  }
+
   if (state.aiActivity == AiActivity::Working && expression != EyeExpression::Blink &&
       expression != EyeExpression::Strain) {
     expression = EyeExpression::Focused;
@@ -222,6 +228,21 @@ void DisplayUi::drawErrorEye(int16_t x, int16_t y, int16_t size) {
   }
 }
 
+void DisplayUi::drawDisconnectedFace() {
+  gfx->fillScreen(faceBackground());
+  gfx->fillRoundRect(42, 78, 58, 10, 4, Black);
+  gfx->fillRoundRect(220, 78, 58, 10, 4, Black);
+
+  gfx->drawRoundRect(130, 58, 34, 24, 4, Black);
+  gfx->drawRoundRect(156, 88, 34, 24, 4, Black);
+  for (int i = 0; i < 3; ++i) {
+    gfx->drawLine(164 + i, 82, 156 + i, 88, Black);
+    gfx->drawLine(168 + i, 85, 160 + i, 91, Black);
+  }
+
+  gfx->fillRoundRect(138, 122, 44, 8, 4, Black);
+}
+
 void DisplayUi::drawUsageCuePanel() {
   const uint16_t fill = rgb(255, 190, 43);
   gfx->fillRoundRect(120, 30, 80, 86, 8, fill);
@@ -250,6 +271,8 @@ void DisplayUi::drawFooter(const AppState &state) {
     }
   } else if (state.aiActivity == AiActivity::Error) {
     snprintf(label, sizeof(label), "ERROR");
+  } else if (state.aiActivity == AiActivity::Disconnected) {
+    snprintf(label, sizeof(label), "DISCONNECTED");
   }
 
   char footer[56];
@@ -305,6 +328,8 @@ void DisplayUi::drawDebugState(AiActivity activity, int16_t idleInSeconds) {
     }
   } else if (activity == AiActivity::Error) {
     snprintf(label, sizeof(label), "ERROR");
+  } else if (activity == AiActivity::Disconnected) {
+    snprintf(label, sizeof(label), "DISCONNECTED");
   }
 
   gfx->setTextColor(Black);

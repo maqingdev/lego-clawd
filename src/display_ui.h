@@ -40,6 +40,7 @@ class DisplayUi {
   void drawDozeMarks();
   void drawErrorFace();
   void drawErrorEye(int16_t x, int16_t y, int16_t size);
+  void drawDisconnectedFace();
   void drawUsageCuePanel();
   void drawFooter(const AppState &state);
   void drawQuietIcon();
