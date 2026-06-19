@@ -249,7 +249,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleBridge() {
         if disconnectBridgeItem.isEnabled {
             runAction("Disconnect") {
-                self.controller.stopBridge()
+                self.controller.stopBridge(notifyDevice: true)
             }
         } else if connectBridgeItem.isEnabled {
             runAction("Connect") {
@@ -262,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func disconnectBridge() {
         runAction("Disconnect") {
-            self.controller.stopBridge()
+            self.controller.stopBridge(notifyDevice: true)
         }
     }
 
@@ -378,8 +378,17 @@ final class LegoClawdController {
         lastAction = isBridgeRunning() ? "Connect: bridge started" : "Connect failed: bridge exited"
     }
 
-    func stopBridge() {
+    func stopBridge(notifyDevice: Bool = false) {
         _ = runCommand(bridgePython.path, [bridgeControl.path, "stop"], timeout: 8)
+        if notifyDevice && !serialPorts().isEmpty {
+            let result = runCommand(
+                bridgeScript.path,
+                ["--once", "--state", "disconnected", "--quiet-mode", quietMode ? "true" : "false"],
+                timeout: 15
+            )
+            lastAction = result == 0 ? "Disconnect: device notified" : "Disconnect: serial released"
+            return
+        }
         lastAction = "Disconnect: serial released"
     }
 
@@ -426,7 +435,7 @@ final class LegoClawdController {
     private func runWithBridgePaused(label: String, action: () -> Void) {
         let wasRunning = isBridgeRunning()
         if wasRunning {
-            stopBridge()
+            stopBridge(notifyDevice: false)
         }
         action()
         lastAction = "\(label): sent"

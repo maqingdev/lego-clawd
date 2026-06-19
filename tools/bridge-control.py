@@ -66,18 +66,78 @@ def process_alive(pid: int | None) -> bool:
         return True
 
 
+def process_command(pid: int) -> str:
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return ""
+
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def serial_owner_pids(port: str | None) -> set[int]:
+    if not port:
+        return set()
+
+    try:
+        result = subprocess.run(
+            ["lsof", "-t", port],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return set()
+
+    if result.returncode != 0:
+        return set()
+
+    pids: set[int] = set()
+    for line in result.stdout.splitlines():
+        try:
+            pids.add(int(line.strip()))
+        except ValueError:
+            continue
+    return pids
+
+
+def bridge_owner_pids(port: str | None) -> set[int]:
+    bridge_path = str(BRIDGE)
+    pids: set[int] = set()
+    for pid in serial_owner_pids(port):
+        command = process_command(pid)
+        if bridge_path in command or "codexbar_bridge.py" in command:
+            pids.add(pid)
+    return pids
+
+
 def status() -> dict[str, Any]:
     pid = read_pid()
-    running = process_alive(pid)
     port = find_serial_port()
-    if not running:
+    pids = bridge_owner_pids(port)
+    if process_alive(pid):
+        assert pid is not None
+        pids.add(pid)
+    else:
         try:
             PID_FILE.unlink()
         except FileNotFoundError:
             pass
+    running = bool(pids)
+    primary_pid = pid if pid in pids else (sorted(pids)[0] if pids else None)
     return {
         "running": running,
-        "pid": pid if running else None,
+        "pid": primary_pid,
+        "pids": sorted(pids),
         "port": port,
         "log": str(LOG_FILE),
     }
@@ -142,7 +202,13 @@ def start(port: str | None, quiet_mode: str | None = None) -> int:
 
 def stop() -> int:
     pid = read_pid()
-    if not process_alive(pid):
+    port = find_serial_port()
+    pids = bridge_owner_pids(port)
+    if process_alive(pid):
+        assert pid is not None
+        pids.add(pid)
+
+    if not pids:
         try:
             PID_FILE.unlink()
         except FileNotFoundError:
@@ -150,25 +216,23 @@ def stop() -> int:
         print(json.dumps(status()))
         return 0
 
-    assert pid is not None
-    try:
-        os.killpg(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    except PermissionError:
-        os.kill(pid, signal.SIGTERM)
-
-    deadline = time.monotonic() + 2
-    while process_alive(pid) and time.monotonic() < deadline:
-        time.sleep(0.05)
-
-    if process_alive(pid):
+    for target_pid in sorted(pids):
         try:
-            os.killpg(pid, signal.SIGKILL)
+            os.kill(target_pid, signal.SIGTERM)
         except ProcessLookupError:
             pass
-        except PermissionError:
-            os.kill(pid, signal.SIGKILL)
+
+    deadline = time.monotonic() + 2
+    while any(process_alive(target_pid) for target_pid in pids) and time.monotonic() < deadline:
+        time.sleep(0.05)
+
+    for target_pid in sorted(pids):
+        if not process_alive(target_pid):
+            continue
+        try:
+            os.kill(target_pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
     try:
         PID_FILE.unlink()

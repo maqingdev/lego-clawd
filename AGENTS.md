@@ -26,7 +26,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
   raised.
 - `error`: normal orange face background with X eyes and `ERROR` footer, servo
   resting pose.
-- `disconnected`: low eyes with a broken-link mark and `DISCONNECTED` footer,
+- `disconnected`: low horizontal eyes with a `DISCONNECTED` footer,
   servo resting pose. Firmware enters this state after 60 seconds without serial
   updates; the bridge sends a 10-second heartbeat while running.
 - `quietMode`: keeps LCD state updates active, shows only a small quiet icon in
@@ -111,7 +111,8 @@ Quiet mode is saved on the board; send `{"quietMode":false}` to turn it off.
 
 It shows connection, AI state, and bridge status; can toggle quiet mode; can test
 idle/working/approval/done/error/self-test; and can disconnect bridge to release
-serial for flashing.
+serial for flashing. A user-initiated menu disconnect sends one final
+`disconnected` state before leaving the bridge stopped.
 - Codex hooks are installed by `tools/install_codex_hooks.py`; hook script is
   `tools/codex_status_hook.py`.
 - `PermissionRequest` must map to `pending`, not `waiting`.

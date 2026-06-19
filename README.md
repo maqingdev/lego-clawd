@@ -140,7 +140,7 @@ Activity behavior:
 | `pending` | wide eyes, animated attention mark, and `APPROVAL` label | raised hand with a short wave |
 | `waiting` | `DONE` label, then usage peek | raised hand |
 | `error` | normal orange face with X eyes | resting pose |
-| `disconnected` | low eyes with a broken-link mark and `DISCONNECTED` label | resting pose |
+| `disconnected` | low horizontal eyes with a `DISCONNECTED` label | resting pose |
 
 When `quietMode` is true, the LCD still reflects the current state with a small
 quiet icon in the footer. The servo suppresses activity motion and moves quickly
@@ -210,6 +210,8 @@ Menu actions:
 - Test Idle, Working, Approval, Done, and Error
 - Self-Test
 
+`Disconnect Bridge` stops the background bridge, sends one final `disconnected`
+state to the board, and leaves serial released.
 `Test Approval` holds approval for 6 seconds, then returns the firmware to idle.
 When tests run while bridge is active, the app pauses bridge, sends the test, and
 restarts bridge with the current quiet mode.
