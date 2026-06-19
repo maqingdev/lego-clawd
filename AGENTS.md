@@ -27,8 +27,8 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - `error`: normal orange face background with X eyes and `ERROR` footer, servo
   resting pose.
 - `disconnected`: low eyes with a broken-link mark and `DISCONNECTED` footer,
-  servo resting pose. Firmware enters this state after 8 seconds without serial
-  updates; the bridge sends a 3-second heartbeat while running.
+  servo resting pose. Firmware enters this state after 60 seconds without serial
+  updates; the bridge sends a 10-second heartbeat while running.
 - `quietMode`: keeps LCD state updates active, shows only a small quiet icon in
   the footer, suppresses servo activity, and moves the arm quickly to `2300us`.
   It is persisted on the ESP32 with Preferences/NVS and restored after reset.

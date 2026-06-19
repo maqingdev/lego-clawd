@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--heartbeat-interval",
         type=float,
-        default=3.0,
+        default=10.0,
         help="Seconds between repeated serial updates when payload is unchanged.",
     )
     parser.add_argument("--interval", type=float, help=argparse.SUPPRESS)
