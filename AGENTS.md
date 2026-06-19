@@ -13,7 +13,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - Serial JSON parsing: `src/usage_data.*`.
 - Servo motion: `src/servo_arm.*`.
 - Shared state: `src/app_state.h`.
-- Activity states: `idle`, `working`, `pending`, and `waiting`.
+- Activity states: `idle`, `working`, `pending`, `waiting`, and `error`.
 - `idle`: face animations, occasional usage peeks, servo resting pose.
 - `working`: focused eyes, low-frequency blink, local-only brow animation,
   servo slow front sweep.
@@ -21,6 +21,9 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
   `APPROVAL` label, servo raised with short wave.
 - `waiting`: task complete and waiting for user input, `DONE` label, servo
   raised.
+- `error`: red error face with X eyes, servo resting pose.
+- `quietMode`: keeps LCD state updates active but suppresses servo activity and
+  returns the arm to resting pose.
 - Usage screen is firmware-timed; bridge only updates cached data over serial.
 
 ## Servo
@@ -35,6 +38,13 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
   - `working`: slow sweep from `1600us` to `1750us`
   - `pending`: wave between `1000us` and `1150us`
   - `waiting`: `1000us`
+  - `error`: `2200us`
+- Quiet mode JSON:
+
+```json
+{"quietMode":true}
+```
+
 - Servo commands use pulse widths, not degree angles.
 - Manual calibration JSON:
 
@@ -82,9 +92,9 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 ./tools/build-menu-bar-app.sh
 ```
 
-It shows connection, AI state, and bridge status; can test idle/working/approval
-/done/self-test; can disconnect bridge to release serial for flashing; and can
-flash firmware then reconnect bridge when enabled.
+It shows connection, AI state, and bridge status; can toggle quiet mode; can test
+idle/working/approval/done/error/self-test; and can disconnect bridge to release
+serial for flashing.
 - Codex hooks are installed by `tools/install_codex_hooks.py`; hook script is
   `tools/codex_status_hook.py`.
 - `PermissionRequest` must map to `pending`, not `waiting`.
@@ -101,6 +111,8 @@ This sends latest usage data and `selfTest: true`.
 ./tools/run-bridge.sh --help
 ./tools/run-bridge.sh --list-states
 ./tools/run-bridge.sh --once --state pending
+./tools/run-bridge.sh --once --state error
+./tools/run-bridge.sh --once --quiet-mode true
 ./tools/run-bridge.sh --approval-test 15
 ```
 
@@ -121,7 +133,7 @@ Preferred command, because it includes latest usage data:
 Sequence:
 
 ```text
-idle -> working -> pending -> waiting -> usage screen -> idle
+idle -> working -> pending -> waiting -> error -> usage screen -> idle
 ```
 
 ## Common Commands
@@ -133,6 +145,8 @@ idle -> working -> pending -> waiting -> usage screen -> idle
 ./tools/run-bridge.sh --dry-run --once
 ./tools/run-bridge.sh --list-states
 ./tools/run-bridge.sh --once --state pending
+./tools/run-bridge.sh --once --state error
+./tools/run-bridge.sh --once --quiet-mode true
 ./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test
 ./tools/run-menu-bar.sh

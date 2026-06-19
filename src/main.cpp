@@ -42,6 +42,7 @@ constexpr SelfTestStep SelfTestSteps[] = {
     {AiActivity::Working, ScreenMode::Face, EyeExpression::Focused, 8000},
     {AiActivity::Pending, ScreenMode::Face, EyeExpression::Wide, 7000},
     {AiActivity::Waiting, ScreenMode::Face, EyeExpression::Neutral, 2000},
+    {AiActivity::Error, ScreenMode::Face, EyeExpression::Neutral, 2500},
     {AiActivity::Waiting, ScreenMode::Usage, EyeExpression::Neutral, 4000},
     {AiActivity::Idle, ScreenMode::Face, EyeExpression::Neutral, 3000},
 };
@@ -220,6 +221,15 @@ void updateFaceExpression(uint32_t now) {
     return;
   }
 
+  if (state.aiActivity == AiActivity::Error) {
+    if (eyeExpression != EyeExpression::Neutral) {
+      eyeExpression = EyeExpression::Neutral;
+      blinkUntilMs = 0;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
   if (eyeExpression == EyeExpression::Focused || eyeExpression == EyeExpression::Strain ||
       eyeExpression == EyeExpression::Wide ||
       (!idleCanSleep(now) && (eyeExpression == EyeExpression::Sleepy ||
@@ -279,6 +289,10 @@ void handleActivityTransition(AiActivity previousActivity, AiActivity currentAct
     nextPendingAttentionMs = now;
     eyeExpression = EyeExpression::Wide;
   } else if (currentActivity == AiActivity::Waiting) {
+    pendingAttentionActive = false;
+    nextPendingAttentionMs = 0;
+    eyeExpression = EyeExpression::Neutral;
+  } else if (currentActivity == AiActivity::Error) {
     pendingAttentionActive = false;
     nextPendingAttentionMs = 0;
     eyeExpression = EyeExpression::Neutral;
@@ -376,8 +390,13 @@ void loop() {
   const int16_t previousServoPulseUs = state.servoPulseUs;
   const int16_t previousPendingWaveForwardPulseUs = state.pendingWaveForwardPulseUs;
   const uint16_t previousPendingWavePauseMs = state.pendingWavePauseMs;
+  const bool previousQuietMode = state.quietMode;
 
   if (usageData.readSerialUpdate(Serial, state)) {
+    if (previousQuietMode != state.quietMode) {
+      servoArm.setQuietMode(state.quietMode);
+    }
+
     if (previousPendingWaveForwardPulseUs != state.pendingWaveForwardPulseUs ||
         previousPendingWavePauseMs != state.pendingWavePauseMs) {
       servoArm.setPendingWaveConfig(state.pendingWaveForwardPulseUs,
@@ -395,11 +414,12 @@ void loop() {
       } else if (state.aiActivity != AiActivity::Waiting) {
         waitingUsagePeekAtMs = 0;
       }
-      if (state.servoPulseUs >= 0) {
+      if (state.servoPulseUs >= 0 && !state.quietMode) {
         if (previousServoPulseUs != state.servoPulseUs) {
           servoArm.setCalibrationPulse(state.servoPulseUs);
         }
-      } else if (previousActivity != state.aiActivity || previousServoPulseUs >= 0) {
+      } else if (previousActivity != state.aiActivity || previousServoPulseUs >= 0 ||
+                 previousQuietMode != state.quietMode) {
         servoArm.setActivity(state.aiActivity);
       }
       forceFaceScreen();

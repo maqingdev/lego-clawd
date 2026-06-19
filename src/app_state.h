@@ -13,6 +13,7 @@ enum class AiActivity : uint8_t {
   Working,
   Pending,
   Waiting,
+  Error,
 };
 
 struct AppState {
@@ -21,6 +22,7 @@ struct AppState {
   AiActivity aiActivity = AiActivity::Idle;
   bool aiWaitingForInput = false;
   bool selfTestRequested = false;
+  bool quietMode = false;
   int16_t idleInSeconds = -1;
   int16_t servoPulseUs = -1;
   int16_t pendingWaveForwardPulseUs = Config::ServoPendingWaveForwardPulseUs;

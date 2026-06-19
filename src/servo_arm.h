@@ -10,12 +10,14 @@ class ServoArm {
   void setActivity(AiActivity activity);
   void setCalibrationPulse(int pulseUs);
   void setPendingWaveConfig(int forwardPulseUs, uint32_t pauseMs);
+  void setQuietMode(bool quiet);
   void setWaitingForInput(bool waiting);
   void update();
   bool attached() const { return attached_; }
 
  private:
   bool attached_ = false;
+  bool quietMode_ = false;
   AiActivity activity_ = AiActivity::Idle;
   int currentPulseUs_ = 0;
   int targetPulseUs_ = 0;
@@ -32,6 +34,7 @@ class ServoArm {
 
   void setMotionSpeed(int stepPulseUs, uint32_t stepMs);
   void setTargetPulse(int pulseUs);
+  void applyActivityTarget();
   void updatePendingTarget(uint32_t now);
   void updateWorkingTarget(uint32_t now);
   void scheduleWorkingBurst();

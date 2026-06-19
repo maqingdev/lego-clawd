@@ -11,6 +11,7 @@ void UsageData::begin(AppState &state) {
   state.aiActivity = AiActivity::Idle;
   state.aiWaitingForInput = false;
   state.selfTestRequested = false;
+  state.quietMode = false;
   state.idleInSeconds = -1;
   state.lastUpdateMs = millis();
 }
@@ -117,6 +118,12 @@ bool UsageData::applyJsonLine(const String &line, AppState &state) {
     state.servoPulseUs = -1;
   }
 
+  if (doc["quietMode"].is<bool>()) {
+    state.quietMode = doc["quietMode"].as<bool>();
+  } else if (doc["quiet"].is<bool>()) {
+    state.quietMode = doc["quiet"].as<bool>();
+  }
+
   state.lastUpdateMs = millis();
   Serial.println("usage update OK");
   return true;
@@ -153,6 +160,9 @@ AiActivity UsageData::activityFromText(const char *value, AiActivity fallback) {
   if (text == "waiting" || text == "waiting_input" || text == "waiting_approval" ||
       text == "done") {
     return AiActivity::Waiting;
+  }
+  if (text == "error" || text == "err" || text == "lost" || text == "fault") {
+    return AiActivity::Error;
   }
 
   return fallback;

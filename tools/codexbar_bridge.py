@@ -18,7 +18,7 @@ DEFAULT_USAGE_FILE = (
     / "Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json"
 )
 DEFAULT_AI_STATUS_FILE = Path.home() / ".lego-clawd/ai-status.json"
-ACTIVITIES = ("idle", "working", "pending", "waiting")
+ACTIVITIES = ("idle", "working", "pending", "waiting", "error")
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,8 +46,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Print JSON without serial.")
     parser.add_argument(
         "--state",
-        choices=("idle", "working", "pending", "approval", "waiting", "done"),
-        help="Override AI state. 'approval' is an alias for pending; 'done' is waiting.",
+        choices=("idle", "working", "pending", "approval", "waiting", "done", "error"),
+        help="Override AI state. 'approval' is pending; 'done' is waiting.",
     )
     parser.add_argument(
         "--list-states",
@@ -91,6 +91,11 @@ def parse_args() -> argparse.Namespace:
         "--pending-wave-pause-ms",
         type=int,
         help="Temporarily override pending wave endpoint pause in milliseconds.",
+    )
+    parser.add_argument(
+        "--quiet-mode",
+        choices=("true", "false"),
+        help="Enable or disable firmware quiet mode.",
     )
     return parser.parse_args()
 
@@ -179,6 +184,8 @@ def normalize_activity(value: Any, waiting: Any = None, pending: Any = None,
             return "pending"
         if text in {"waiting", "waiting_input", "done"}:
             return "waiting"
+        if text in {"error", "err", "lost", "fault"}:
+            return "error"
 
     if isinstance(waiting, bool):
         return "waiting" if waiting else "idle"
@@ -277,6 +284,8 @@ def add_runtime_overrides(payload: dict[str, Any], args: argparse.Namespace) -> 
         payload["pendingWaveForwardPulseUs"] = args.pending_wave_forward_pulse_us
     if args.pending_wave_pause_ms is not None:
         payload["pendingWavePauseMs"] = args.pending_wave_pause_ms
+    if args.quiet_mode is not None:
+        payload["quietMode"] = args.quiet_mode == "true"
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:

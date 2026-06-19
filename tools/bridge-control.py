@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Manage Lego Clawd bridge process.")
     parser.add_argument("command", choices=("start", "stop", "status", "status-json"))
     parser.add_argument("--port", help="Serial port. Defaults to first detected ESP32 port.")
+    parser.add_argument("--quiet-mode", choices=("true", "false"), help="Forward quiet mode to the bridge.")
     return parser.parse_args()
 
 
@@ -82,7 +83,7 @@ def status() -> dict[str, Any]:
     }
 
 
-def start(port: str | None) -> int:
+def start(port: str | None, quiet_mode: str | None = None) -> int:
     current = status()
     if current["running"]:
         print(json.dumps(current))
@@ -101,23 +102,27 @@ def start(port: str | None) -> int:
 
     with LOG_FILE.open("a", encoding="utf-8") as log:
         log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} bridge-control start {port}\n")
+        command = [
+            sys.executable,
+            str(BRIDGE),
+            "--port",
+            port,
+            "--usage-file",
+            str(USAGE_FILE),
+            "--ai-status-file",
+            str(AI_STATUS_FILE),
+            "--state-interval",
+            "1",
+            "--usage-interval",
+            "60",
+            "--log-file",
+            str(LOG_FILE),
+        ]
+        if quiet_mode is not None:
+            command.extend(["--quiet-mode", quiet_mode])
+
         process = subprocess.Popen(
-            [
-                sys.executable,
-                str(BRIDGE),
-                "--port",
-                port,
-                "--usage-file",
-                str(USAGE_FILE),
-                "--ai-status-file",
-                str(AI_STATUS_FILE),
-                "--state-interval",
-                "1",
-                "--usage-interval",
-                "60",
-                "--log-file",
-                str(LOG_FILE),
-            ],
+            command,
             cwd=PROJECT_ROOT,
             env=env,
             stdout=log,
@@ -176,7 +181,7 @@ def stop() -> int:
 def main() -> int:
     args = parse_args()
     if args.command == "start":
-        return start(args.port)
+        return start(args.port, args.quiet_mode)
     if args.command == "stop":
         return stop()
     current = status()

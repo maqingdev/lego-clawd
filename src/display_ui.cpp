@@ -41,6 +41,12 @@ bool DisplayUi::begin() {
 }
 
 void DisplayUi::renderFace(EyeExpression expression, const AppState &state) {
+  if (state.aiActivity == AiActivity::Error) {
+    drawErrorFace();
+    drawFooter(state);
+    return;
+  }
+
   if (state.aiActivity == AiActivity::Working && expression != EyeExpression::Blink &&
       expression != EyeExpression::Strain) {
     expression = EyeExpression::Focused;
@@ -190,6 +196,20 @@ void DisplayUi::drawDozeMarks() {
   gfx->print("Z");
 }
 
+void DisplayUi::drawErrorFace() {
+  gfx->fillScreen(rgb(238, 82, 83));
+  drawErrorEye(42, 48, 54);
+  drawErrorEye(224, 48, 54);
+  gfx->fillRoundRect(130, 112, 60, 10, 4, Black);
+}
+
+void DisplayUi::drawErrorEye(int16_t x, int16_t y, int16_t size) {
+  for (int i = 0; i < 5; ++i) {
+    gfx->drawLine(x + i, y, x + size + i, y + size, Black);
+    gfx->drawLine(x + size + i, y, x + i, y + size, Black);
+  }
+}
+
 void DisplayUi::drawFooter(const AppState &state) {
   char label[40] = "IDLE";
   if (state.servoPulseUs >= 0) {
@@ -204,6 +224,15 @@ void DisplayUi::drawFooter(const AppState &state) {
     } else {
       snprintf(label, sizeof(label), "DONE");
     }
+  } else if (state.aiActivity == AiActivity::Error) {
+    snprintf(label, sizeof(label), "ERROR");
+  }
+
+  if (state.quietMode && state.servoPulseUs < 0) {
+    char quietLabel[40];
+    snprintf(quietLabel, sizeof(quietLabel), "QUIET | %s", label);
+    strncpy(label, quietLabel, sizeof(label));
+    label[sizeof(label) - 1] = '\0';
   }
 
   char footer[56];
@@ -229,6 +258,8 @@ void DisplayUi::drawDebugState(AiActivity activity, int16_t idleInSeconds) {
     } else {
       snprintf(label, sizeof(label), "DONE");
     }
+  } else if (activity == AiActivity::Error) {
+    snprintf(label, sizeof(label), "ERROR");
   }
 
   gfx->setTextColor(Black);

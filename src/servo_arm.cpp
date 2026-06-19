@@ -34,9 +34,21 @@ void ServoArm::begin() {
 
 void ServoArm::setActivity(AiActivity activity) {
   activity_ = activity;
+  applyActivityTarget();
+}
+
+void ServoArm::applyActivityTarget() {
   holdUntilMs_ = 0;
   workRestUntilMs_ = 0;
   pendingWaveForward_ = true;
+
+  if (quietMode_) {
+    setMotionSpeed(Config::ServoIdleStepPulseUs, Config::ServoIdleStepMs);
+    setTargetPulse(Config::ServoDownPulseUs);
+    Serial.print("servo quiet target pulse us: ");
+    Serial.println(targetPulseUs_);
+    return;
+  }
 
   switch (activity_) {
     case AiActivity::Idle:
@@ -57,6 +69,10 @@ void ServoArm::setActivity(AiActivity activity) {
       setMotionSpeed(Config::ServoRaiseStepPulseUs, Config::ServoRaiseStepMs);
       setTargetPulse(Config::ServoRaisedPulseUs);
       break;
+    case AiActivity::Error:
+      setMotionSpeed(Config::ServoIdleStepPulseUs, Config::ServoIdleStepMs);
+      setTargetPulse(Config::ServoDownPulseUs);
+      break;
   }
 
   Serial.print("servo target pulse us: ");
@@ -68,6 +84,13 @@ void ServoArm::setWaitingForInput(bool waiting) {
 }
 
 void ServoArm::setCalibrationPulse(int pulseUs) {
+  if (quietMode_) {
+    setMotionSpeed(Config::ServoIdleStepPulseUs, Config::ServoIdleStepMs);
+    setTargetPulse(Config::ServoDownPulseUs);
+    Serial.println("servo calibration ignored in quiet mode");
+    return;
+  }
+
   activity_ = AiActivity::Idle;
   holdUntilMs_ = 0;
   workRestUntilMs_ = 0;
@@ -76,6 +99,17 @@ void ServoArm::setCalibrationPulse(int pulseUs) {
   setTargetPulse(pulseUs);
   Serial.print("servo calibration pulse us: ");
   Serial.println(targetPulseUs_);
+}
+
+void ServoArm::setQuietMode(bool quiet) {
+  if (quietMode_ == quiet) {
+    return;
+  }
+
+  quietMode_ = quiet;
+  applyActivityTarget();
+  Serial.print("quiet mode: ");
+  Serial.println(quietMode_ ? "on" : "off");
 }
 
 void ServoArm::setPendingWaveConfig(int forwardPulseUs, uint32_t pauseMs) {
@@ -100,9 +134,9 @@ void ServoArm::update() {
   }
 
   const uint32_t now = millis();
-  if (activity_ == AiActivity::Working) {
+  if (!quietMode_ && activity_ == AiActivity::Working) {
     updateWorkingTarget(now);
-  } else if (activity_ == AiActivity::Pending) {
+  } else if (!quietMode_ && activity_ == AiActivity::Pending) {
     updatePendingTarget(now);
   }
 

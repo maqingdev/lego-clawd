@@ -118,12 +118,13 @@ Supported keys:
 - `codex1w` or `oneWeekRemainingPct`: remaining 1-week quota percent
 - `reset5h` or `fiveHourResetAt`: display text for 5-hour reset
 - `reset1w` or `oneWeekResetAt`: display text for 1-week reset
-- `aiState` or `state`: `idle`, `working`, `pending`, or `waiting`
+- `aiState` or `state`: `idle`, `working`, `pending`, `waiting`, or `error`
 - `waiting` or `aiWaitingForInput`: legacy boolean; `true` maps to `waiting`
 - `servoPulseUs`: manual servo calibration override
 - `pendingWaveForwardPulseUs` or `pendingWavePulseUs`: temporary pending wave
   forward endpoint override
 - `pendingWavePauseMs`: temporary pending wave endpoint pause override
+- `quietMode` or `quiet`: suppress servo motion while keeping LCD updates active
 - `selfTest`: when `true`, runs the end-to-end firmware self-test
 
 Activity behavior:
@@ -134,6 +135,10 @@ Activity behavior:
 | `working` | focused eyes, low-frequency blink, brow animation | slow front sweep |
 | `pending` | wide eyes, animated attention mark, and `APPROVAL` label | raised hand with a short wave |
 | `waiting` | `DONE` label, then usage peek | raised hand |
+| `error` | red error face with X eyes | resting pose |
+
+When `quietMode` is true, the LCD still reflects the current state but the servo
+returns to the resting pose and stays quiet.
 
 The usage screen is firmware-timed. The bridge only updates cached usage data
 over serial.
@@ -217,14 +222,16 @@ Useful bridge checks:
 ./tools/run-bridge.sh --list-states
 ./tools/run-bridge.sh --dry-run --once
 ./tools/run-bridge.sh --once --state pending
+./tools/run-bridge.sh --once --state error
+./tools/run-bridge.sh --once --quiet-mode true
 ./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test
 ```
 
-Use `--state idle|working|pending|waiting` to force one activity. `approval`
-is accepted as an alias for `pending`, and `done` is accepted as an alias for
-`waiting`. `--approval-test SECONDS` sends `pending`, holds for the requested
-time, then sends `idle`.
+Use `--state idle|working|pending|waiting|error` to force one activity.
+`approval` is accepted as an alias for `pending`, and `done` is accepted as an
+alias for `waiting`. `--approval-test SECONDS` sends `pending`, holds for the
+requested time, then sends `idle`.
 
 Pending wave tuning can be sent without recompiling:
 
@@ -248,7 +255,7 @@ Run:
 Sequence:
 
 ```text
-idle -> working -> pending -> waiting -> usage screen -> idle
+idle -> working -> pending -> waiting -> error -> usage screen -> idle
 ```
 
 Expected serial log:

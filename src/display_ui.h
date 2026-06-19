@@ -36,6 +36,8 @@ class DisplayUi {
   void clearApprovalMarks();
   void drawApprovalMarks();
   void drawDozeMarks();
+  void drawErrorFace();
+  void drawErrorEye(int16_t x, int16_t y, int16_t size);
   void drawFooter(const AppState &state);
   void drawDebugState(AiActivity activity, int16_t idleInSeconds);
   void drawUsageBlock(int16_t x, const char *label, const UsageWindow &window);

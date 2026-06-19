@@ -16,15 +16,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let lastActionItem = NSMenuItem(title: "Last: none", action: nil, keyEquivalent: "")
     private let connectBridgeItem = NSMenuItem(title: "Connect Bridge", action: nil, keyEquivalent: "c")
     private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Bridge", action: nil, keyEquivalent: "d")
+    private let quietModeItem = NSMenuItem(title: "Quiet Mode", action: nil, keyEquivalent: "m")
     private let testIdleItem = NSMenuItem(title: "Test Idle", action: nil, keyEquivalent: "1")
     private let testWorkingItem = NSMenuItem(title: "Test Working", action: nil, keyEquivalent: "2")
     private let testApprovalItem = NSMenuItem(title: "Test Approval", action: nil, keyEquivalent: "3")
     private let testDoneItem = NSMenuItem(title: "Test Done", action: nil, keyEquivalent: "4")
+    private let testErrorItem = NSMenuItem(title: "Test Error", action: nil, keyEquivalent: "5")
     private let approvalTestItem = NSMenuItem(title: "Approval Test 10s", action: nil, keyEquivalent: "a")
     private let selfTestItem = NSMenuItem(title: "Self-Test", action: nil, keyEquivalent: "s")
 
     private var testItems: [NSMenuItem] {
-        [testIdleItem, testWorkingItem, testApprovalItem, testDoneItem, approvalTestItem, selfTestItem]
+        [testIdleItem, testWorkingItem, testApprovalItem, testDoneItem, testErrorItem, approvalTestItem, selfTestItem]
     }
 
     static func main() {
@@ -81,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(groupHeader("Actions"))
         menu.addItem(connectBridgeItem)
         menu.addItem(disconnectBridgeItem)
+        menu.addItem(quietModeItem)
         menu.addItem(.separator())
 
         menu.addItem(groupHeader("Test"))
@@ -88,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(testWorkingItem)
         menu.addItem(testApprovalItem)
         menu.addItem(testDoneItem)
+        menu.addItem(testErrorItem)
         menu.addItem(approvalTestItem)
         menu.addItem(selfTestItem)
         menu.addItem(.separator())
@@ -101,10 +105,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         bridgeItem.toolTip = "Toggle bridge connection"
         connectBridgeItem.action = #selector(connectBridge)
         disconnectBridgeItem.action = #selector(disconnectBridge)
+        quietModeItem.action = #selector(toggleQuietMode)
         testIdleItem.action = #selector(testIdle)
         testWorkingItem.action = #selector(testWorking)
         testApprovalItem.action = #selector(testApproval)
         testDoneItem.action = #selector(testDone)
+        testErrorItem.action = #selector(testError)
         approvalTestItem.action = #selector(approvalTest)
         selfTestItem.action = #selector(selfTest)
 
@@ -143,6 +149,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         bridgeItem.isEnabled = snapshot.isConnected || snapshot.bridgeRunning
         connectBridgeItem.isEnabled = snapshot.isConnected && !snapshot.bridgeRunning
         disconnectBridgeItem.isEnabled = snapshot.bridgeRunning
+        quietModeItem.isEnabled = snapshot.isConnected
+        quietModeItem.state = controller.quietMode ? .on : .off
         testItems.forEach { $0.isEnabled = snapshot.isConnected }
         bridgeItem.attributedTitle = menuStatusTitle(
             dot: snapshot.bridgeRunning ? "●" : "●",
@@ -261,6 +269,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    @objc private func toggleQuietMode() {
+        let enabled = !controller.quietMode
+        controller.quietMode = enabled
+        quietModeItem.state = enabled ? .on : .off
+        runAction(enabled ? "Quiet On" : "Quiet Off") {
+            self.controller.sendQuietMode(enabled)
+        }
+    }
+
     @objc private func testIdle() {
         runAction("Idle") {
             self.controller.sendState("idle")
@@ -282,6 +299,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func testDone() {
         runAction("Done") {
             self.controller.sendState("waiting")
+        }
+    }
+
+    @objc private func testError() {
+        runAction("Error") {
+            self.controller.sendState("error")
         }
     }
 
@@ -318,6 +341,10 @@ final class LegoClawdController {
     private let bridgeControl: URL
 
     var lastAction = "none"
+    var quietMode: Bool {
+        get { UserDefaults.standard.bool(forKey: "quietMode") }
+        set { UserDefaults.standard.set(newValue, forKey: "quietMode") }
+    }
 
     init() {
         let envRoot = ProcessInfo.processInfo.environment["LEGO_CLAWD_PROJECT_ROOT"]
@@ -348,7 +375,11 @@ final class LegoClawdController {
     }
 
     func startBridge() {
-        let result = runCommand(bridgePython.path, [bridgeControl.path, "start"], timeout: 8)
+        let result = runCommand(
+            bridgePython.path,
+            [bridgeControl.path, "start", "--quiet-mode", quietMode ? "true" : "false"],
+            timeout: 8
+        )
         if result != 0 {
             lastAction = "Connect failed: bridge-control \(result)"
             return
@@ -364,6 +395,16 @@ final class LegoClawdController {
     func sendState(_ state: String) {
         runWithBridgePaused(label: "State \(state)") {
             _ = self.runCommand(self.bridgeScript.path, ["--once", "--state", state], timeout: 15)
+        }
+    }
+
+    func sendQuietMode(_ enabled: Bool) {
+        runWithBridgePaused(label: enabled ? "Quiet on" : "Quiet off") {
+            _ = self.runCommand(
+                self.bridgeScript.path,
+                ["--once", "--quiet-mode", enabled ? "true" : "false"],
+                timeout: 15
+            )
         }
     }
 
