@@ -1,169 +1,61 @@
 # Lego Clawd Agent Notes
 
+Keep this file short. Put user-facing setup, protocol, hardware behavior, and
+long command explanations in `README.md`.
+
 ## Project
 
-PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
-1.9" LCD and one servo arm. Use VS Code + PlatformIO, not Arduino IDE.
+- PlatformIO Arduino firmware for an ESP32-S3 LEGO companion with a Waveshare
+  1.9" LCD and one servo arm.
+- Use VS Code + PlatformIO. Do not use Arduino IDE.
+- Prefer repo-local patterns and keep hardware changes small and easy to test.
 
-## Firmware
+## Code Map
 
-- Main firmware entry: `src/main.cpp`.
-- Hardware/config constants: `include/config.h`.
-- LCD rendering: `src/display_ui.*`.
-- Serial JSON parsing: `src/usage_data.*`.
-- Servo motion: `src/servo_arm.*`.
-- Persistent board settings: `src/persistent_settings.*`.
-- Shared state: `src/app_state.h`.
-- Activity states: `idle`, `working`, `pending`, `waiting`, `error`, and
+- Firmware entry: `src/main.cpp`
+- Hardware/config constants: `include/config.h`
+- LCD rendering: `src/display_ui.*`
+- Serial JSON parsing: `src/usage_data.*`
+- Servo motion: `src/servo_arm.*`
+- Persistent ESP32 settings: `src/persistent_settings.*`
+- Shared state: `src/app_state.h`
+- Host bridge: `tools/codexbar_bridge.py`, `tools/run-bridge.sh`
+- macOS menu bar app: `macos/LegoClawdBar`
+
+## Firmware Rules
+
+- Activity states are `idle`, `working`, `pending`, `waiting`, `error`, and
   `disconnected`.
-- `idle`: face animations, a visible mini usage cue before occasional usage
-  peeks, servo resting pose.
-- `working`: focused eyes, low-frequency blink, local-only brow animation,
-  elapsed footer text that shifts into deep-work labels, servo slow front sweep.
-- `pending`: approval requested, wide eyes with animated attention mark and
-  `APPROVAL` label, servo raised with short wave.
-- `waiting`: task complete and waiting for user input, `DONE` label, servo
-  raised.
-- `error`: normal orange face background with X eyes and `ERROR` footer, servo
-  resting pose.
-- `disconnected`: low horizontal eyes with a `DISCONNECTED` footer,
-  servo resting pose. Firmware enters this state after 5 minutes without serial
-  updates; the bridge sends a 10-second heartbeat while running.
-- `quietMode`: keeps LCD state updates active, shows only a small quiet icon in
-  the footer, suppresses servo activity, and moves the arm quickly to `2300us`.
-  It is persisted on the ESP32 with Preferences/NVS and restored after reset.
-- Usage screen is firmware-timed; bridge only updates cached data over serial.
-- After firmware code changes, prefer building and uploading the firmware to the
-  ESP32 in the same turn so the physical robot matches the repo. If the upload
-  seems risky, the change is large, the board/serial port is unavailable, or the
-  change is not worth flashing immediately, explicitly tell the user that the
-  firmware has not been flashed yet.
+- `quietMode` is persisted on the ESP32. For manual Codex/CLI commands, omit
+  `--quiet-mode` unless the user explicitly asks to change the stored board
+  setting; never send `--quiet-mode false` casually.
+- `PermissionRequest` must map to `pending`, not `waiting`.
+- Usage screen timing is firmware-owned; the bridge only sends cached usage
+  data and heartbeats.
+- After firmware code changes, prefer building and uploading in the same turn so
+  the physical robot matches the repo. If upload is risky, unavailable, or not
+  worth flashing immediately, explicitly say the firmware was not flashed.
 
-## Servo
+## Servo Safety
 
 - Servo signal pin: `GPIO42`.
-- Current calibrated landmarks:
-  - `1000us`: vertical up
-  - `1675us`: straight forward
-  - `2300us`: vertical down
-- Current state mapping:
-  - `idle`: `2200us`
-  - `quietMode`: `2300us`
-  - `working`: slow sweep from `1600us` to `1750us`
-  - `pending`: wave between `1000us` and `1150us`
-  - `waiting`: `1000us`
-  - `error`: `2200us`
-  - `disconnected`: `2200us`
-- Quiet mode JSON:
-
-```json
-{"quietMode":true}
-```
-
-Quiet mode is saved on the board; send `{"quietMode":false}` to turn it off.
-
 - Servo commands use pulse widths, not degree angles.
-- Manual calibration JSON:
-
-```json
-{"servoPulseUs":1675}
-```
-
-- Runtime pending wave tuning JSON:
-
-```json
-{"pendingWaveForwardPulseUs":1150,"pendingWavePauseMs":300}
-```
-
-- Servo-only PlatformIO environment: `servo_gpio42_test`.
+- Current landmarks: `1000us` vertical up, `1675us` straight forward,
+  `2300us` vertical down.
+- Quiet mode moves the arm quickly to `2300us`.
 - Avoid servo signal on `GPIO47`/`GPIO48` (IMU I2C), `GPIO19`/`GPIO20` (USB),
   `GPIO39` (SD card), `GPIO9`-`GPIO14` (LCD), and boot/strapping pins.
-- All grounds must be common. Do not power servo from ESP32 `3V3`.
-- A USB-C to USB-C cable is currently stable; an earlier USB-A to USB-C cable
-  caused unreliable servo power.
+- All grounds must be common. Do not power the servo from ESP32 `3V3`.
 
-## Host Bridge
+## Command Rules
 
-- Start bridge from repo root with:
+- When running PlatformIO from Codex, request escalated permissions immediately;
+  PlatformIO writes under `~/.platformio` and otherwise hits sandbox cache/lock
+  failures.
+- If upload fails, check whether the bridge owns the serial port with
+  `lsof /dev/cu.usbmodem101`.
 
-```sh
-./tools/run-bridge.sh
-```
-
-- Bridge reads CodexBar usage from:
-
-```text
-~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json
-```
-
-- Bridge reads AI state from:
-
-```text
-~/.lego-clawd/ai-status.json
-```
-
-- macOS menu bar app:
-
-```sh
-./tools/run-menu-bar.sh
-./tools/build-menu-bar-app.sh
-```
-
-It shows connection, AI state, and bridge status; can toggle quiet mode; can test
-idle/working/approval/done/error/self-test; and can disconnect bridge to release
-serial for flashing. A user-initiated menu disconnect sends one final
-`disconnected` state before leaving the bridge stopped. Menu app actions send
-the menu's current `quietMode:true/false` explicitly. For manual Codex/CLI
-commands, omit `--quiet-mode` unless the user explicitly asks to change the
-board's stored quiet setting; never send `--quiet-mode false` casually.
-- Codex hooks are installed by `tools/install_codex_hooks.py`; hook script is
-  `tools/codex_status_hook.py`.
-- `PermissionRequest` must map to `pending`, not `waiting`.
-- Bridge self-test command:
-
-```sh
-./tools/run-bridge.sh --once --self-test
-```
-
-This sends latest usage data and `selfTest: true`.
-- Useful bridge discovery/test commands:
-
-```sh
-./tools/run-bridge.sh --help
-./tools/run-bridge.sh --list-states
-./tools/run-bridge.sh --once --state pending
-./tools/run-bridge.sh --once --state error
-./tools/run-bridge.sh --once --state disconnected
-./tools/run-bridge.sh --once --quiet-mode true
-./tools/run-bridge.sh --approval-test 15
-```
-
-## Firmware Self-Test
-
-Serial JSON:
-
-```json
-{"selfTest":true}
-```
-
-Preferred command, because it includes latest usage data:
-
-```sh
-./tools/run-bridge.sh --once --self-test
-```
-
-Sequence:
-
-```text
-idle -> working -> pending -> waiting -> error -> disconnected -> usage screen -> idle
-```
-
-## Common Commands
-
-When running PlatformIO commands from Codex, request escalated permissions
-immediately instead of first trying the sandboxed command. PlatformIO writes
-under `~/.platformio` for package locks/cache, which is outside the workspace
-sandbox and otherwise fails with `platforms.lock` or `.cache` permission errors.
+Useful commands:
 
 ```sh
 ~/.platformio/penv/bin/pio run
@@ -174,15 +66,8 @@ sandbox and otherwise fails with `platforms.lock` or `.cache` permission errors.
 ./tools/run-bridge.sh --once --state pending
 ./tools/run-bridge.sh --once --state error
 ./tools/run-bridge.sh --once --state disconnected
-./tools/run-bridge.sh --once --quiet-mode true
 ./tools/run-bridge.sh --approval-test 15
 ./tools/run-bridge.sh --once --self-test
 ./tools/run-menu-bar.sh
 ./tools/build-menu-bar-app.sh
-```
-
-If upload fails, check whether the bridge owns the serial port:
-
-```sh
-lsof /dev/cu.usbmodem101
 ```
