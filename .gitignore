@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 .lego-clawd/
 .DS_Store
+.vscode/c_cpp_properties.json
+.vscode/launch.json
 macos/LegoClawdBar/.build/
 macos/LegoClawdBar/Sources/LegoClawdBar/Resources/AppIcon.iconset/
 macos/build/
