@@ -43,7 +43,7 @@ class DisplayUi {
   void drawDisconnectedFace();
   void drawUsageCuePanel();
   void drawFooter(const AppState &state);
-  void drawQuietIcon();
+  void drawQuietIcon(int16_t x, int16_t y);
   void workingLabel(const AppState &state, char *label, size_t size);
   void drawDebugState(AiActivity activity, int16_t idleInSeconds);
   void drawUsageBlock(int16_t x, const char *label, const UsageWindow &window);

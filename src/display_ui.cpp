@@ -266,30 +266,49 @@ void DisplayUi::drawFooter(const AppState &state) {
     snprintf(label, sizeof(label), "DISCONNECTED");
   }
 
-  char footer[56];
-  snprintf(footer, sizeof(footer), "%u%% | %s", state.codex5h.remainingPercent, label);
-
   gfx->fillRect(0, 150, Config::DisplayWidth, 20, faceBackground());
   gfx->setTextColor(Black);
   gfx->setTextSize(1);
-  const int16_t textWidth = static_cast<int16_t>(strlen(footer) * 6);
-  gfx->setCursor(max<int16_t>(0, (Config::DisplayWidth - textWidth) / 2), 158);
-  gfx->print(footer);
 
-  if (state.quietMode && state.servoPulseUs < 0) {
-    drawQuietIcon();
+  char percentText[8];
+  snprintf(percentText, sizeof(percentText), "%u%%", state.codex5h.remainingPercent);
+
+  constexpr int16_t CharWidth = 6;
+  constexpr int16_t IconGapBefore = 4;
+  constexpr int16_t IconWidth = 8;
+  constexpr int16_t IconGapAfter = 4;
+  constexpr const char *Separator = " | ";
+  const bool showQuietIcon = state.quietMode && state.servoPulseUs < 0;
+  const int16_t percentWidth = static_cast<int16_t>(strlen(percentText) * CharWidth);
+  const int16_t separatorWidth = static_cast<int16_t>(strlen(Separator) * CharWidth);
+  const int16_t labelWidth = static_cast<int16_t>(strlen(label) * CharWidth);
+  const int16_t iconSectionWidth =
+      showQuietIcon ? IconGapBefore + IconWidth + IconGapAfter : 0;
+  const int16_t totalWidth = percentWidth + iconSectionWidth + separatorWidth + labelWidth;
+  int16_t x = max<int16_t>(0, (Config::DisplayWidth - totalWidth) / 2);
+
+  if (showQuietIcon) {
+    x += IconGapBefore;
+    drawQuietIcon(x, 157);
+    x += IconWidth + IconGapAfter;
   }
+
+  gfx->setCursor(x, 158);
+  gfx->print(percentText);
+  x += percentWidth;
+
+  gfx->setCursor(x, 158);
+  gfx->print(Separator);
+  x += separatorWidth;
+
+  gfx->setCursor(x, 158);
+  gfx->print(label);
 }
 
-void DisplayUi::drawQuietIcon() {
-  constexpr int16_t cx = 303;
-  constexpr int16_t cy = 160;
-  constexpr int16_t r = 6;
-  gfx->drawCircle(cx, cy, r, Black);
-  gfx->drawCircle(cx, cy, r - 1, Black);
-  for (int i = 0; i < 2; ++i) {
-    gfx->drawLine(cx - 5, cy + 5 - i, cx + 5, cy - 5 - i, Black);
-  }
+void DisplayUi::drawQuietIcon(int16_t x, int16_t y) {
+  constexpr int16_t Radius = 4;
+  gfx->fillCircle(x + Radius, y + Radius, Radius, Black);
+  gfx->fillCircle(x + Radius + 5, y + Radius - 1, Radius, faceBackground());
 }
 
 void DisplayUi::workingLabel(const AppState &state, char *label, size_t size) {

@@ -27,7 +27,7 @@ PlatformIO Arduino project for an ESP32-S3 LEGO companion with a Waveshare
 - `error`: normal orange face background with X eyes and `ERROR` footer, servo
   resting pose.
 - `disconnected`: low horizontal eyes with a `DISCONNECTED` footer,
-  servo resting pose. Firmware enters this state after 60 seconds without serial
+  servo resting pose. Firmware enters this state after 5 minutes without serial
   updates; the bridge sends a 10-second heartbeat while running.
 - `quietMode`: keeps LCD state updates active, shows only a small quiet icon in
   the footer, suppresses servo activity, and moves the arm quickly to `2300us`.
@@ -159,6 +159,11 @@ idle -> working -> pending -> waiting -> error -> disconnected -> usage screen -
 ```
 
 ## Common Commands
+
+When running PlatformIO commands from Codex, request escalated permissions
+immediately instead of first trying the sandboxed command. PlatformIO writes
+under `~/.platformio` for package locks/cache, which is outside the workspace
+sandbox and otherwise fails with `platforms.lock` or `.cache` permission errors.
 
 ```sh
 ~/.platformio/penv/bin/pio run
