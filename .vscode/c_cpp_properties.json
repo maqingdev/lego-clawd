@@ -10,6 +10,7 @@
             "includePath": [
                 "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/include",
                 "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/src",
+                "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ArduinoJson/src",
                 "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ESP32Servo/src",
                 "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/GFX Library for Arduino/src",
@@ -232,7 +233,6 @@
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                 "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
@@ -252,6 +252,7 @@
                 "path": [
                     "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/include",
                     "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/src",
+                    "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ArduinoJson/src",
                     "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/ESP32Servo/src",
                     "/Users/maqing/Library/Mobile Documents/com~apple~CloudDocs/toolkit/lego-clawd/.pio/libdeps/waveshare_esp32_s3_lcd_1_9/GFX Library for Arduino/src",
@@ -474,7 +475,6 @@
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                    "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                     "/Users/maqing/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
