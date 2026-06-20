@@ -32,6 +32,7 @@ uint32_t nextPendingAttentionMs = 0;
 bool workingStrained = false;
 bool pendingAttentionActive = false;
 bool usagePeekCueActive = false;
+bool manualUsageActive = false;
 bool selfTestActive = false;
 uint8_t selfTestStep = 0;
 uint32_t selfTestStepStartedMs = 0;
@@ -95,11 +96,21 @@ bool idleCanSleep(uint32_t now) {
 }
 
 void startUsagePeekCue(uint32_t now) {
+  manualUsageActive = false;
   usagePeekCueActive = true;
   usagePeekCueStartedMs = now;
   eyeExpression = EyeExpression::LookRight;
   screen = ScreenMode::UsageCue;
   blinkUntilMs = 0;
+  renderCurrentScreen();
+}
+
+void showUsageSummary(uint32_t now) {
+  manualUsageActive = true;
+  usagePeekCueActive = false;
+  waitingUsagePeekAtMs = 0;
+  usagePeekStartedMs = now;
+  screen = ScreenMode::Usage;
   renderCurrentScreen();
 }
 
@@ -124,9 +135,20 @@ void updateScreenSchedule(uint32_t now) {
   }
 
   if (state.servoPulseUs >= 0) {
+    manualUsageActive = false;
     usagePeekCueActive = false;
     if (screen != ScreenMode::Face) {
       screen = ScreenMode::Face;
+      renderCurrentScreen();
+    }
+    return;
+  }
+
+  if (manualUsageActive) {
+    if (now - usagePeekStartedMs >= Config::UsagePeekDurationMs) {
+      manualUsageActive = false;
+      screen = ScreenMode::Face;
+      lastScreenSwitchMs = now;
       renderCurrentScreen();
     }
     return;
@@ -313,6 +335,7 @@ void handleActivityTransition(AiActivity previousActivity, AiActivity currentAct
     activityStartedMs = now;
     state.activityElapsedSeconds = -1;
     pendingAttentionActive = false;
+    manualUsageActive = false;
     usagePeekCueActive = false;
     nextPendingAttentionMs = 0;
     eyeExpression = EyeExpression::Neutral;
@@ -325,6 +348,7 @@ void handleActivityTransition(AiActivity previousActivity, AiActivity currentAct
   activityStartedMs = now;
   state.activityElapsedSeconds = 0;
   lastActivityElapsedRenderMs = 0;
+  manualUsageActive = false;
   usagePeekCueActive = false;
   blinkUntilMs = 0;
   if (currentActivity == AiActivity::Working) {
@@ -402,6 +426,7 @@ void startSelfTest(uint32_t now) {
   selfTestActive = true;
   selfTestStep = 0;
   selfTestStepStartedMs = now;
+  manualUsageActive = false;
   usagePeekCueActive = false;
   waitingUsagePeekAtMs = 0;
   usagePeekStartedMs = 0;
@@ -426,6 +451,7 @@ void updateSelfTest(uint32_t now) {
     state.aiWaitingForInput = false;
     state.activityElapsedSeconds = -1;
     state.servoPulseUs = -1;
+    state.showUsageRequested = false;
     state.lastUpdateMs = now;
     screen = ScreenMode::Face;
     eyeExpression = EyeExpression::Neutral;
@@ -463,6 +489,7 @@ void updateConnectionState(uint32_t now) {
   state.activityElapsedSeconds = -1;
   state.servoPulseUs = -1;
   waitingUsagePeekAtMs = 0;
+  manualUsageActive = false;
   handleActivityTransition(previousActivity, state.aiActivity, now);
   servoArm.setActivity(state.aiActivity);
   screen = ScreenMode::Face;
@@ -515,8 +542,11 @@ void loop() {
 
     if (state.selfTestRequested) {
       state.selfTestRequested = false;
+      state.showUsageRequested = false;
       startSelfTest(now);
     } else {
+      const bool showUsageRequested = state.showUsageRequested;
+      state.showUsageRequested = false;
       handleActivityTransition(previousActivity, state.aiActivity, now);
       if (previousActivity == AiActivity::Working &&
           state.aiActivity == AiActivity::Waiting) {
@@ -532,7 +562,11 @@ void loop() {
                  previousQuietMode != state.quietMode) {
         servoArm.setActivity(state.aiActivity);
       }
-      forceFaceScreen();
+      if (showUsageRequested) {
+        showUsageSummary(now);
+      } else {
+        forceFaceScreen();
+      }
     }
   }
 

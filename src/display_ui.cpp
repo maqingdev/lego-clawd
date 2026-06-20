@@ -362,7 +362,7 @@ void DisplayUi::drawUsageBlock(int16_t x, const char *label, const UsageWindow &
 
   gfx->setTextSize(1);
   gfx->setCursor(x, 116);
-  gfx->print("reset ");
+  gfx->print("RESET ");
   gfx->print(window.resetAt);
 
   drawProgressBar(x, 138, 122, 12, window.remainingPercent);

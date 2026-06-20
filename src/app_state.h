@@ -23,6 +23,7 @@ struct AppState {
   AiActivity aiActivity = AiActivity::Idle;
   bool aiWaitingForInput = false;
   bool selfTestRequested = false;
+  bool showUsageRequested = false;
   bool quietMode = false;
   int16_t idleInSeconds = -1;
   int16_t activityElapsedSeconds = -1;

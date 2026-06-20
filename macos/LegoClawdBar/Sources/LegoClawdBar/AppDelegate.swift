@@ -22,10 +22,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let testApprovalItem = NSMenuItem(title: "Test Approval", action: nil, keyEquivalent: "3")
     private let testDoneItem = NSMenuItem(title: "Test Done", action: nil, keyEquivalent: "4")
     private let testErrorItem = NSMenuItem(title: "Test Error", action: nil, keyEquivalent: "5")
+    private let testUsageItem = NSMenuItem(title: "Test Show Usage", action: nil, keyEquivalent: "6")
     private let selfTestItem = NSMenuItem(title: "Self-Test", action: nil, keyEquivalent: "s")
 
     private var testItems: [NSMenuItem] {
-        [testIdleItem, testWorkingItem, testApprovalItem, testDoneItem, testErrorItem, selfTestItem]
+        [
+            testIdleItem,
+            testWorkingItem,
+            testApprovalItem,
+            testDoneItem,
+            testErrorItem,
+            testUsageItem,
+            selfTestItem
+        ]
     }
 
     static func main() {
@@ -91,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(testApprovalItem)
         menu.addItem(testDoneItem)
         menu.addItem(testErrorItem)
+        menu.addItem(testUsageItem)
         menu.addItem(selfTestItem)
         menu.addItem(.separator())
 
@@ -109,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         testApprovalItem.action = #selector(testApproval)
         testDoneItem.action = #selector(testDone)
         testErrorItem.action = #selector(testError)
+        testUsageItem.action = #selector(testUsage)
         selfTestItem.action = #selector(selfTest)
 
         [connectionItem, aiStateItem, lastActionItem].forEach { item in
@@ -305,6 +316,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    @objc private func testUsage() {
+        runAction("Show Usage") {
+            self.controller.showUsage()
+        }
+    }
+
     @objc private func selfTest() {
         runAction("Self-Test") {
             self.controller.selfTest()
@@ -429,6 +446,17 @@ final class LegoClawdController {
                 ["--once", "--self-test"] + self.quietModeArguments(),
                 timeout: 20
             )
+        }
+    }
+
+    func showUsage() {
+        runWithBridgePaused(label: "Show usage") {
+            _ = self.runCommand(
+                self.bridgeScript.path,
+                ["--once", "--show-usage"] + self.quietModeArguments(),
+                timeout: 15
+            )
+            Thread.sleep(forTimeInterval: 10.5)
         }
     }
 

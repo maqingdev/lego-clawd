@@ -73,6 +73,11 @@ def parse_args() -> argparse.Namespace:
         help="Include selfTest=true so the firmware runs its end-to-end demo.",
     )
     parser.add_argument(
+        "--show-usage",
+        action="store_true",
+        help="Ask the firmware to show the usage summary once.",
+    )
+    parser.add_argument(
         "--idle-timeout",
         type=float,
         default=60.0,
@@ -150,7 +155,7 @@ def percent(window: Any) -> int:
     return max(0, min(100, int(round(float(value)))))
 
 
-def format_reset(window: Any) -> str:
+def format_reset(window: Any, display: str) -> str:
     if not isinstance(window, dict):
         return "--:--"
 
@@ -159,10 +164,9 @@ def format_reset(window: Any) -> str:
         try:
             reset_time = datetime.fromisoformat(resets_at.replace("Z", "+00:00"))
             local_time = reset_time.astimezone()
-            now = datetime.now().astimezone()
-            if local_time.date() == now.date():
+            if display == "time":
                 return local_time.strftime("%H:%M")
-            return local_time.strftime("%b %d %H:%M")
+            return local_time.strftime("%b %d")
         except ValueError:
             pass
 
@@ -173,8 +177,14 @@ def format_reset(window: Any) -> str:
     return "--:--"
 
 
-def normalize_activity(value: Any, waiting: Any = None, pending: Any = None,
-                       hook_event: Any = None) -> str:
+def normalize_activity(
+    value: Any,
+    waiting: Any = None,
+    pending: Any = None,
+    hook_event: Any = None,
+    *,
+    allow_disconnected: bool = True,
+) -> str:
     if hook_event == "PermissionRequest" or (isinstance(pending, bool) and pending):
         return "pending"
 
@@ -193,7 +203,7 @@ def normalize_activity(value: Any, waiting: Any = None, pending: Any = None,
             return "waiting"
         if text in {"error", "err", "fault"}:
             return "error"
-        if text in {"disconnected", "offline", "no_link", "lost"}:
+        if allow_disconnected and text in {"disconnected", "offline", "no_link", "lost"}:
             return "disconnected"
 
     if isinstance(waiting, bool):
@@ -260,6 +270,7 @@ def read_activity(args: argparse.Namespace, status: dict[str, Any] | None = None
         status.get("waiting"),
         status.get("pending"),
         status.get("hookEvent"),
+        allow_disconnected=False,
     )
 
 
@@ -272,8 +283,8 @@ def build_usage_payload(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "codex5h": percent(primary),
         "codex1w": percent(secondary),
-        "reset5h": format_reset(primary),
-        "reset1w": format_reset(secondary),
+        "reset5h": format_reset(primary, "time"),
+        "reset1w": format_reset(secondary, "date"),
     }
 
 
@@ -298,11 +309,39 @@ def add_runtime_overrides(payload: dict[str, Any], args: argparse.Namespace) -> 
         payload["quietMode"] = args.quiet_mode == "true"
 
 
+def has_runtime_overrides(args: argparse.Namespace) -> bool:
+    return (
+        args.pending_wave_forward_pulse_us is not None
+        or args.pending_wave_pause_ms is not None
+        or args.quiet_mode is not None
+    )
+
+
+def is_runtime_override_only(args: argparse.Namespace) -> bool:
+    return (
+        args.once
+        and has_runtime_overrides(args)
+        and args.state is None
+        and args.waiting is None
+        and args.waiting_file is None
+        and args.approval_test is None
+        and not args.self_test
+        and not args.show_usage
+    )
+
+
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
+    if is_runtime_override_only(args):
+        payload: dict[str, Any] = {}
+        add_runtime_overrides(payload, args)
+        return payload
+
     payload = {**build_usage_payload(args), **build_status_payload(args)}
     add_runtime_overrides(payload, args)
     if args.self_test:
         payload["selfTest"] = True
+    if args.show_usage:
+        payload["showUsage"] = True
     return payload
 
 
@@ -414,22 +453,32 @@ def main() -> int:
 
         while True:
             now = time.monotonic()
+            runtime_override_only = is_runtime_override_only(args)
             usage_due = (
-                usage_payload is None
-                or args.once
-                or args.usage_interval <= 0
-                or now - last_usage_refresh >= args.usage_interval
+                not runtime_override_only
+                and (
+                    usage_payload is None
+                    or args.once
+                    or args.usage_interval <= 0
+                    or now - last_usage_refresh >= args.usage_interval
+                )
             )
 
             if usage_due:
                 usage_payload = build_usage_payload(args)
                 last_usage_refresh = now
 
-            assert usage_payload is not None
-            payload = {**usage_payload, **build_status_payload(args)}
-            add_runtime_overrides(payload, args)
-            if args.self_test:
-                payload["selfTest"] = True
+            if runtime_override_only:
+                payload = {}
+                add_runtime_overrides(payload, args)
+            else:
+                assert usage_payload is not None
+                payload = {**usage_payload, **build_status_payload(args)}
+                add_runtime_overrides(payload, args)
+                if args.self_test:
+                    payload["selfTest"] = True
+                if args.show_usage:
+                    payload["showUsage"] = True
 
             if args.once or payload != last_sent_payload:
                 send_payload(payload)

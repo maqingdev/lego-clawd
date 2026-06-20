@@ -11,6 +11,7 @@ void UsageData::begin(AppState &state) {
   state.aiActivity = AiActivity::Idle;
   state.aiWaitingForInput = false;
   state.selfTestRequested = false;
+  state.showUsageRequested = false;
   state.quietMode = false;
   state.idleInSeconds = -1;
   state.activityElapsedSeconds = -1;
@@ -116,6 +117,11 @@ bool UsageData::applyJsonLine(const String &line, AppState &state) {
 
   if (doc["selfTest"].is<bool>() && doc["selfTest"].as<bool>()) {
     state.selfTestRequested = true;
+    state.servoPulseUs = -1;
+  }
+
+  if (doc["showUsage"].is<bool>() && doc["showUsage"].as<bool>()) {
+    state.showUsageRequested = true;
     state.servoPulseUs = -1;
   }
 
