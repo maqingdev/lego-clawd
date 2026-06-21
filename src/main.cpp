@@ -62,7 +62,7 @@ constexpr uint8_t SelfTestStepCount = sizeof(SelfTestSteps) / sizeof(SelfTestSte
 void renderCurrentScreen();
 
 EyeExpression randomEyeExpression(bool allowSleep) {
-  switch (random(0, allowSleep ? 6 : 4)) {
+  switch (random(0, allowSleep ? 9 : 7)) {
     case 0:
       return EyeExpression::Neutral;
     case 1:
@@ -72,6 +72,12 @@ EyeExpression randomEyeExpression(bool allowSleep) {
     case 3:
       return EyeExpression::LookRight;
     case 4:
+      return EyeExpression::Wink;
+    case 5:
+      return EyeExpression::Curious;
+    case 6:
+      return EyeExpression::Squint;
+    case 7:
       return EyeExpression::Sleepy;
     default:
       return EyeExpression::Doze;
@@ -96,7 +102,7 @@ uint8_t workingFaceLevelForElapsed(int16_t elapsed) {
   if (elapsed >= static_cast<int16_t>(Config::WorkingTiredDelayMs / 1000)) {
     return 2;
   }
-  if (elapsed >= static_cast<int16_t>(Config::WorkingDeepWorkDelayMs / 1000)) {
+  if (elapsed >= static_cast<int16_t>(Config::WorkingSweatDelayMs / 1000)) {
     return 1;
   }
   return 0;

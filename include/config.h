@@ -27,6 +27,7 @@ constexpr uint32_t IdleSleepDelayMs = 45000;
 constexpr uint32_t WorkingBlinkIntervalMinMs = 12000;
 constexpr uint32_t WorkingBlinkIntervalMaxMs = 22000;
 constexpr uint32_t WorkingStrainIntervalMs = 900;
+constexpr uint32_t WorkingSweatDelayMs = 15000;
 constexpr uint32_t WorkingDeepWorkDelayMs = 45000;
 constexpr uint32_t WorkingTiredDelayMs = 120000;
 constexpr uint32_t PendingAttentionIntervalMs = 700;

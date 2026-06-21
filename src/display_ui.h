@@ -14,6 +14,9 @@ enum class EyeExpression : uint8_t {
   Wide,
   LookLeft,
   LookRight,
+  Wink,
+  Curious,
+  Squint,
 };
 
 class DisplayUi {
@@ -34,8 +37,8 @@ class DisplayUi {
   void drawEye(int16_t x, int16_t y, int16_t w, int16_t h, EyeExpression expression,
                bool leftEye);
   void drawFaceDetails(const AppState &state);
-  void drawSweatDrop(int16_t x, int16_t y, int16_t size, uint16_t color);
-  void drawWorkingStress(uint8_t level);
+  void drawSweatDrop(int16_t x, int16_t y, int16_t size);
+  void drawWorkingStress(const AppState &state, uint8_t level);
   void clearWorkingBrow(int16_t x, int16_t y, int16_t w);
   void drawWorkingBrow(int16_t x, int16_t y, int16_t w, EyeExpression expression,
                        bool leftEye);
