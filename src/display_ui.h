@@ -22,6 +22,7 @@ enum class EyeExpression : uint8_t {
 class DisplayUi {
  public:
   bool begin();
+  void renderBooting(const AppState &state);
   void renderFace(EyeExpression expression, const AppState &state);
   void renderWorkingBrows(EyeExpression expression);
   void renderPendingAttention(bool active);

@@ -417,6 +417,30 @@ def main() -> int:
     last_sent_payload: dict[str, Any] | None = None
     last_usage_refresh = 0.0
     last_sent_at = 0.0
+    serial_rx_buffer = bytearray()
+
+    def drain_serial_input() -> None:
+        nonlocal serial_rx_buffer
+        if args.dry_run or serial_conn is None or port is None:
+            return
+
+        waiting = getattr(serial_conn, "in_waiting", 0)
+        if waiting <= 0:
+            return
+
+        serial_rx_buffer.extend(serial_conn.read(waiting))
+        while b"\n" in serial_rx_buffer:
+            raw_line, _, rest = serial_rx_buffer.partition(b"\n")
+            serial_rx_buffer = bytearray(rest)
+            text = raw_line.replace(b"\r", b"").decode("utf-8", errors="replace").strip()
+            if text:
+                emit(f"{port} -> {text}", args.log_file)
+
+        if len(serial_rx_buffer) > 512:
+            text = serial_rx_buffer.decode("utf-8", errors="replace").strip()
+            if text:
+                emit(f"{port} -> {text}", args.log_file)
+            serial_rx_buffer.clear()
 
     def send_payload(payload: dict[str, Any]) -> None:
         line = json.dumps(payload, separators=(",", ":"))
@@ -430,6 +454,8 @@ def main() -> int:
         serial_conn.write((line + "\n").encode("utf-8"))
         serial_conn.flush()
         emit(f"{port} <- {line}", args.log_file)
+        time.sleep(0.02)
+        drain_serial_input()
 
     def send_activity_once(activity: str, usage_payload: dict[str, Any]) -> None:
         payload = {
@@ -443,6 +469,7 @@ def main() -> int:
         send_payload(payload)
 
     try:
+        drain_serial_input()
         if args.approval_test is not None:
             usage_payload = build_usage_payload(args)
             send_activity_once("pending", usage_payload)
@@ -452,6 +479,7 @@ def main() -> int:
             return 0
 
         while True:
+            drain_serial_input()
             now = time.monotonic()
             runtime_override_only = is_runtime_override_only(args)
             usage_due = (
@@ -493,6 +521,7 @@ def main() -> int:
             time.sleep(max(0.1, args.state_interval))
     finally:
         if serial_conn:
+            drain_serial_input()
             serial_conn.close()
 
 

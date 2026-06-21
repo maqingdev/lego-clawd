@@ -40,6 +40,26 @@ bool DisplayUi::begin() {
   return true;
 }
 
+void DisplayUi::renderBooting(const AppState &state) {
+  gfx->fillScreen(faceBackground());
+  drawEye(42, 54, 58, 30, EyeExpression::Sleepy, true);
+  drawEye(220, 54, 58, 30, EyeExpression::Sleepy, false);
+
+  gfx->setTextColor(Black);
+  gfx->setTextSize(1);
+  constexpr const char *Label = "BOOTING | WAITING FOR BRIDGE";
+  constexpr int16_t LabelWidth = 28 * 6;
+  constexpr int16_t IconWidth = 16;
+  const int16_t totalWidth = LabelWidth + (state.quietMode ? IconWidth : 0);
+  int16_t x = (Config::DisplayWidth - totalWidth) / 2;
+  if (state.quietMode) {
+    drawQuietIcon(x, 156);
+    x += IconWidth;
+  }
+  gfx->setCursor(x, 158);
+  gfx->print(Label);
+}
+
 void DisplayUi::renderFace(EyeExpression expression, const AppState &state) {
   if (state.aiActivity == AiActivity::Error) {
     drawErrorFace();

@@ -148,9 +148,11 @@ to a lower/back resting pose. Quiet mode is persisted on the ESP32 and restored
 after reset until `quietMode:false` is received.
 
 The usage screen is firmware-timed. The bridge only updates cached usage data
-over serial. If the firmware does not receive a serial update for 5 minutes, it
-switches to `disconnected`; the bridge sends a 10-second heartbeat while running
-so a stable unchanged state does not look disconnected.
+over serial. After boot or serial reset, the LCD shows `BOOTING` for up to 8
+seconds while waiting for the first bridge payload. If the firmware does not
+receive a serial update for 5 minutes, it switches to `disconnected`; the bridge
+sends a 10-second heartbeat while running so a stable unchanged state does not
+look disconnected.
 
 ## Host Bridge
 

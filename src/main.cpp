@@ -29,12 +29,14 @@ uint32_t lastActivityElapsedRenderMs = 0;
 uint32_t nextWorkingBlinkMs = 0;
 uint32_t nextWorkingStrainMs = 0;
 uint32_t nextPendingAttentionMs = 0;
+uint32_t bootingStartedMs = 0;
 uint8_t lastWorkingFaceLevel = 0;
 bool workingStrained = false;
 bool pendingAttentionActive = false;
 bool usagePeekCueActive = false;
 bool manualUsageActive = false;
 bool selfTestActive = false;
+bool bootingScreenActive = true;
 uint8_t selfTestStep = 0;
 uint32_t selfTestStepStartedMs = 0;
 
@@ -132,6 +134,11 @@ void showUsageSummary(uint32_t now) {
 }
 
 void renderCurrentScreen() {
+  if (bootingScreenActive && screen == ScreenMode::Face) {
+    display.renderBooting(state);
+    return;
+  }
+
   switch (screen) {
     case ScreenMode::Face:
       display.renderFace(eyeExpression, state);
@@ -147,6 +154,10 @@ void renderCurrentScreen() {
 }
 
 void updateScreenSchedule(uint32_t now) {
+  if (bootingScreenActive) {
+    return;
+  }
+
   if (selfTestActive) {
     return;
   }
@@ -224,6 +235,10 @@ void updateScreenSchedule(uint32_t now) {
 }
 
 void updateFaceExpression(uint32_t now) {
+  if (bootingScreenActive) {
+    return;
+  }
+
   if (screen != ScreenMode::Face) {
     return;
   }
@@ -487,7 +502,7 @@ void updateSelfTest(uint32_t now) {
 }
 
 void updateConnectionState(uint32_t now) {
-  if (selfTestActive || state.servoPulseUs >= 0) {
+  if (bootingScreenActive || selfTestActive || state.servoPulseUs >= 0) {
     return;
   }
 
@@ -495,9 +510,15 @@ void updateConnectionState(uint32_t now) {
     return;
   }
 
-  if (now - state.lastUpdateMs < Config::SerialDisconnectTimeoutMs) {
+  const int32_t updateAgeMs = static_cast<int32_t>(now - state.lastUpdateMs);
+  if (updateAgeMs < 0 ||
+      updateAgeMs < static_cast<int32_t>(Config::SerialDisconnectTimeoutMs)) {
     return;
   }
+
+  Serial.print("connection timeout -> disconnected after ");
+  Serial.print(updateAgeMs);
+  Serial.println("ms without serial update");
 
   const AiActivity previousActivity = state.aiActivity;
   state.aiActivity = AiActivity::Disconnected;
@@ -510,6 +531,16 @@ void updateConnectionState(uint32_t now) {
   handleActivityTransition(previousActivity, state.aiActivity, now);
   servoArm.setActivity(state.aiActivity);
   screen = ScreenMode::Face;
+  renderCurrentScreen();
+}
+
+void updateBootingScreen(uint32_t now) {
+  if (!bootingScreenActive ||
+      now - bootingStartedMs < Config::BootingScreenMs) {
+    return;
+  }
+
+  bootingScreenActive = false;
   renderCurrentScreen();
 }
 
@@ -528,8 +559,10 @@ void setup() {
   servoArm.setActivity(state.aiActivity);
 
   display.begin();
+  bootingStartedMs = millis();
+  bootingScreenActive = true;
   renderCurrentScreen();
-  lastScreenSwitchMs = millis();
+  lastScreenSwitchMs = bootingStartedMs;
   idleStartedMs = lastScreenSwitchMs;
   activityStartedMs = lastScreenSwitchMs;
   scheduleEyeChange();
@@ -546,6 +579,9 @@ void loop() {
   const bool previousQuietMode = state.quietMode;
 
   if (usageData.readSerialUpdate(Serial, state)) {
+    const bool firstPayloadAfterBoot = bootingScreenActive;
+    bootingScreenActive = false;
+
     if (previousQuietMode != state.quietMode) {
       settings.saveQuietMode(state.quietMode);
       servoArm.setQuietMode(state.quietMode);
@@ -583,7 +619,7 @@ void loop() {
       }
       if (showUsageRequested) {
         showUsageSummary(now);
-      } else if (activityChanged || servoModeChanged) {
+      } else if (activityChanged || servoModeChanged || firstPayloadAfterBoot) {
         forceFaceScreen();
       } else if (previousQuietMode != state.quietMode) {
         renderCurrentScreen();
@@ -595,6 +631,7 @@ void loop() {
 
   updateConnectionState(now);
   updateSelfTest(now);
+  updateBootingScreen(now);
   updateScreenSchedule(now);
   updateActivityElapsed(now);
   updateFaceExpression(now);
