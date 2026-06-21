@@ -14,8 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let connectionItem = NSMenuItem(title: "Serial: checking...", action: nil, keyEquivalent: "")
     private let aiStateItem = NSMenuItem(title: "State: unknown", action: nil, keyEquivalent: "")
     private let lastActionItem = NSMenuItem(title: "Last: none", action: nil, keyEquivalent: "")
-    private let connectBridgeItem = NSMenuItem(title: "Connect Bridge", action: nil, keyEquivalent: "c")
-    private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Bridge", action: nil, keyEquivalent: "d")
+    private let connectBridgeItem = NSMenuItem(title: "Connect Bridge", action: nil, keyEquivalent: "")
+    private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Bridge", action: nil, keyEquivalent: "")
     private let quietModeItem = NSMenuItem(title: "Quiet Mode", action: nil, keyEquivalent: "m")
     private let testIdleItem = NSMenuItem(title: "Test Idle", action: nil, keyEquivalent: "1")
     private let testWorkingItem = NSMenuItem(title: "Test Working", action: nil, keyEquivalent: "2")
@@ -109,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.items.forEach { $0.target = self }
         bridgeItem.isEnabled = true
         bridgeItem.target = self
-        bridgeItem.action = #selector(toggleBridge)
+        bridgeItem.action = nil
         bridgeItem.toolTip = "Toggle bridge connection"
         connectBridgeItem.action = #selector(connectBridge)
         disconnectBridgeItem.action = #selector(disconnectBridge)
@@ -385,7 +385,7 @@ final class LegoClawdController {
     func startBridge() {
         let result = runCommand(
             bridgePython.path,
-            [bridgeControl.path, "start"] + quietModeArguments(),
+            [bridgeControl.path, "start"],
             timeout: 8
         )
         if result != 0 {
@@ -400,7 +400,7 @@ final class LegoClawdController {
         if notifyDevice && !serialPorts().isEmpty {
             let result = runCommand(
                 bridgeScript.path,
-                ["--once", "--state", "disconnected"] + quietModeArguments(),
+                ["--once", "--state", "disconnected"],
                 timeout: 15
             )
             lastAction = result == 0 ? "Disconnect: device notified" : "Disconnect: serial released"
@@ -413,7 +413,7 @@ final class LegoClawdController {
         runWithBridgePaused(label: "State \(state)") {
             _ = self.runCommand(
                 self.bridgeScript.path,
-                ["--once", "--state", state] + self.quietModeArguments(),
+                ["--once", "--state", state],
                 timeout: 15
             )
         }
@@ -433,7 +433,7 @@ final class LegoClawdController {
         runWithBridgePaused(label: "Approval test") {
             _ = self.runCommand(
                 self.bridgeScript.path,
-                ["--approval-test", "\(seconds)"] + self.quietModeArguments(),
+                ["--approval-test", "\(seconds)"],
                 timeout: seconds + 15
             )
         }
@@ -443,7 +443,7 @@ final class LegoClawdController {
         runWithBridgePaused(label: "Self-test") {
             _ = self.runCommand(
                 self.bridgeScript.path,
-                ["--once", "--self-test"] + self.quietModeArguments(),
+                ["--once", "--self-test"],
                 timeout: 20
             )
         }
@@ -453,15 +453,10 @@ final class LegoClawdController {
         runWithBridgePaused(label: "Show usage") {
             _ = self.runCommand(
                 self.bridgeScript.path,
-                ["--once", "--show-usage"] + self.quietModeArguments(),
+                ["--once", "--show-usage"],
                 timeout: 15
             )
-            Thread.sleep(forTimeInterval: 10.5)
         }
-    }
-
-    private func quietModeArguments() -> [String] {
-        ["--quiet-mode", quietMode ? "true" : "false"]
     }
 
     private func runWithBridgePaused(label: String, action: () -> Void) {

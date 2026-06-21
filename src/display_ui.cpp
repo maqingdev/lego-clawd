@@ -67,6 +67,7 @@ void DisplayUi::renderFace(EyeExpression expression, const AppState &state) {
   if (expression == EyeExpression::Doze) {
     drawDozeMarks();
   }
+  drawFaceDetails(state);
   drawFooter(state);
 }
 
@@ -121,6 +122,21 @@ uint16_t DisplayUi::faceBackground() const {
   return rgb(244, 164, 10);
 }
 
+uint8_t DisplayUi::workingFaceLevel(const AppState &state) const {
+  if (state.aiActivity != AiActivity::Working || state.activityElapsedSeconds < 0) {
+    return 0;
+  }
+  if (state.activityElapsedSeconds >=
+      static_cast<int16_t>(Config::WorkingTiredDelayMs / 1000)) {
+    return 2;
+  }
+  if (state.activityElapsedSeconds >=
+      static_cast<int16_t>(Config::WorkingDeepWorkDelayMs / 1000)) {
+    return 1;
+  }
+  return 0;
+}
+
 void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
                         EyeExpression expression, bool leftEye) {
   int16_t offsetX = 0;
@@ -142,8 +158,8 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
     eyeH = 34;
     eyeY = y + 18;
   } else if (expression == EyeExpression::Strain) {
-    eyeH = 34;
-    eyeY = y + 18;
+    eyeH = 24;
+    eyeY = y + 24;
   } else if (expression == EyeExpression::Wide) {
     eyeH = 70;
     eyeY = y - 6;
@@ -167,6 +183,37 @@ void DisplayUi::drawEye(int16_t x, int16_t y, int16_t w, int16_t h,
   }
 }
 
+void DisplayUi::drawFaceDetails(const AppState &state) {
+  const uint8_t level = workingFaceLevel(state);
+  if (level > 0) {
+    drawWorkingStress(level);
+  }
+}
+
+void DisplayUi::drawSweatDrop(int16_t x, int16_t y, int16_t size, uint16_t color) {
+  const int16_t tipX = x + size;
+  const int16_t tipY = y - size;
+  const int16_t bodyX = x - size / 2;
+  const int16_t bodyY = y + size / 2;
+  gfx->fillTriangle(tipX, tipY, bodyX - size, bodyY, bodyX + size, bodyY + size, color);
+  gfx->fillCircle(bodyX, bodyY, size, color);
+  gfx->fillCircle(bodyX - size / 3, bodyY + size / 2, max<int16_t>(2, size - 2), color);
+}
+
+void DisplayUi::drawWorkingStress(uint8_t level) {
+  const uint16_t sweat = rgb(218, 248, 255);
+  drawSweatDrop(212, 38, 7, sweat);
+
+  if (level >= 2) {
+    drawSweatDrop(110, 42, 5, sweat);
+    const uint16_t heat = rgb(238, 82, 83);
+    for (int i = 0; i < 3; ++i) {
+      gfx->drawLine(142 + i, 28, 132 + i, 42, heat);
+      gfx->drawLine(178 + i, 28, 188 + i, 42, heat);
+    }
+  }
+}
+
 void DisplayUi::clearWorkingBrow(int16_t x, int16_t y, int16_t w) {
   gfx->fillRect(x - 6, y - 18, w + 12, 28, faceBackground());
 }
@@ -175,12 +222,12 @@ void DisplayUi::drawWorkingBrow(int16_t x, int16_t y, int16_t w,
                                 EyeExpression expression, bool leftEye) {
   for (int i = 0; i < 4; ++i) {
     if (leftEye) {
-      const int16_t y1 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
-      const int16_t y2 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
+      const int16_t y1 = expression == EyeExpression::Strain ? y - 18 + i : y - 8 + i;
+      const int16_t y2 = expression == EyeExpression::Strain ? y - 3 + i : y - 2 + i;
       gfx->drawLine(x, y1, x + w, y2, Black);
     } else {
-      const int16_t y1 = expression == EyeExpression::Strain ? y - 1 + i : y - 2 + i;
-      const int16_t y2 = expression == EyeExpression::Strain ? y - 14 + i : y - 8 + i;
+      const int16_t y1 = expression == EyeExpression::Strain ? y - 3 + i : y - 2 + i;
+      const int16_t y2 = expression == EyeExpression::Strain ? y - 18 + i : y - 8 + i;
       gfx->drawLine(x, y1, x + w, y2, Black);
     }
   }

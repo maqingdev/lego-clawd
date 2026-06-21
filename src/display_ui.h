@@ -30,8 +30,12 @@ class DisplayUi {
  private:
   uint16_t rgb(uint8_t red, uint8_t green, uint8_t blue) const;
   uint16_t faceBackground() const;
+  uint8_t workingFaceLevel(const AppState &state) const;
   void drawEye(int16_t x, int16_t y, int16_t w, int16_t h, EyeExpression expression,
                bool leftEye);
+  void drawFaceDetails(const AppState &state);
+  void drawSweatDrop(int16_t x, int16_t y, int16_t size, uint16_t color);
+  void drawWorkingStress(uint8_t level);
   void clearWorkingBrow(int16_t x, int16_t y, int16_t w);
   void drawWorkingBrow(int16_t x, int16_t y, int16_t w, EyeExpression expression,
                        bool leftEye);

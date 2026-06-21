@@ -29,6 +29,7 @@ uint32_t lastActivityElapsedRenderMs = 0;
 uint32_t nextWorkingBlinkMs = 0;
 uint32_t nextWorkingStrainMs = 0;
 uint32_t nextPendingAttentionMs = 0;
+uint8_t lastWorkingFaceLevel = 0;
 bool workingStrained = false;
 bool pendingAttentionActive = false;
 bool usagePeekCueActive = false;
@@ -89,6 +90,16 @@ void scheduleWorkingBlink() {
 
 void scheduleWorkingStrain(uint32_t now) {
   nextWorkingStrainMs = now + Config::WorkingStrainIntervalMs;
+}
+
+uint8_t workingFaceLevelForElapsed(int16_t elapsed) {
+  if (elapsed >= static_cast<int16_t>(Config::WorkingTiredDelayMs / 1000)) {
+    return 2;
+  }
+  if (elapsed >= static_cast<int16_t>(Config::WorkingDeepWorkDelayMs / 1000)) {
+    return 1;
+  }
+  return 0;
 }
 
 bool idleCanSleep(uint32_t now) {
@@ -226,15 +237,9 @@ void updateFaceExpression(uint32_t now) {
       blinkUntilMs = now + Config::BlinkMs;
       renderCurrentScreen();
     } else if (blinkUntilMs == 0 && now >= nextWorkingStrainMs) {
-      const bool canUpdateBrowsOnly = eyeExpression == EyeExpression::Focused ||
-                                      eyeExpression == EyeExpression::Strain;
       workingStrained = !workingStrained;
       eyeExpression = workingStrained ? EyeExpression::Strain : EyeExpression::Focused;
-      if (canUpdateBrowsOnly) {
-        display.renderWorkingBrows(eyeExpression);
-      } else {
-        renderCurrentScreen();
-      }
+      renderCurrentScreen();
       scheduleWorkingStrain(now);
     } else if (blinkUntilMs == 0 && eyeExpression != EyeExpression::Focused &&
                eyeExpression != EyeExpression::Strain) {
@@ -355,6 +360,7 @@ void handleActivityTransition(AiActivity previousActivity, AiActivity currentAct
     pendingAttentionActive = false;
     nextPendingAttentionMs = 0;
     workingStrained = false;
+    lastWorkingFaceLevel = 0;
     eyeExpression = EyeExpression::Focused;
     scheduleWorkingBlink();
     scheduleWorkingStrain(now);
@@ -391,7 +397,12 @@ void updateActivityElapsed(uint32_t now) {
 
   state.activityElapsedSeconds = elapsed;
   if (screen == ScreenMode::Face && state.aiActivity == AiActivity::Working &&
-      now - lastActivityElapsedRenderMs >= 1000) {
+      workingFaceLevelForElapsed(elapsed) != lastWorkingFaceLevel) {
+    lastWorkingFaceLevel = workingFaceLevelForElapsed(elapsed);
+    renderCurrentScreen();
+    lastActivityElapsedRenderMs = now;
+  } else if (screen == ScreenMode::Face && state.aiActivity == AiActivity::Working &&
+             now - lastActivityElapsedRenderMs >= 1000) {
     display.renderFooter(state);
     lastActivityElapsedRenderMs = now;
   }
@@ -547,6 +558,8 @@ void loop() {
     } else {
       const bool showUsageRequested = state.showUsageRequested;
       state.showUsageRequested = false;
+      const bool activityChanged = previousActivity != state.aiActivity;
+      const bool servoModeChanged = previousServoPulseUs != state.servoPulseUs;
       handleActivityTransition(previousActivity, state.aiActivity, now);
       if (previousActivity == AiActivity::Working &&
           state.aiActivity == AiActivity::Waiting) {
@@ -564,8 +577,12 @@ void loop() {
       }
       if (showUsageRequested) {
         showUsageSummary(now);
-      } else {
+      } else if (activityChanged || servoModeChanged) {
         forceFaceScreen();
+      } else if (previousQuietMode != state.quietMode) {
+        renderCurrentScreen();
+      } else if (screen == ScreenMode::Usage) {
+        renderCurrentScreen();
       }
     }
   }

@@ -175,8 +175,6 @@ def start(port: str | None, quiet_mode: str | None = None) -> int:
             "1",
             "--usage-interval",
             "60",
-            "--log-file",
-            str(LOG_FILE),
         ]
         if quiet_mode is not None:
             command.extend(["--quiet-mode", quiet_mode])
