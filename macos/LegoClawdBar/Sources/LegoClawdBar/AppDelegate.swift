@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let bridgeItem = NSMenuItem(title: "Bridge: stopped", action: nil, keyEquivalent: "")
     private let connectionItem = NSMenuItem(title: "Serial: checking...", action: nil, keyEquivalent: "")
+    private let deviceItem = NSMenuItem(title: "Device: unknown", action: nil, keyEquivalent: "")
     private let aiStateItem = NSMenuItem(title: "State: unknown", action: nil, keyEquivalent: "")
     private let lastActionItem = NSMenuItem(title: "Last: none", action: nil, keyEquivalent: "")
     private let connectBridgeItem = NSMenuItem(title: "Connect Bridge", action: nil, keyEquivalent: "")
@@ -84,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(groupHeader("Status"))
         menu.addItem(bridgeItem)
         menu.addItem(connectionItem)
+        menu.addItem(deviceItem)
         menu.addItem(aiStateItem)
         menu.addItem(lastActionItem)
         menu.addItem(.separator())
@@ -122,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         testUsageItem.action = #selector(testUsage)
         selfTestItem.action = #selector(selfTest)
 
-        [connectionItem, aiStateItem, lastActionItem].forEach { item in
+        [connectionItem, deviceItem, aiStateItem, lastActionItem].forEach { item in
             item.isEnabled = false
             item.target = nil
             item.action = nil
@@ -168,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             textColor: bridgeItem.isEnabled ? .labelColor : .secondaryLabelColor
         )
         connectionItem.title = "Serial: \(snapshot.connectionText)"
+        deviceItem.title = "Device: \(snapshot.deviceText)"
         aiStateItem.title = "State: \(snapshot.aiState)"
         lastActionItem.title = "Last: \(snapshot.lastAction)"
     }
@@ -337,6 +340,7 @@ struct StatusSnapshot {
     let isConnected: Bool
     let bridgeRunning: Bool
     let connectionText: String
+    let deviceText: String
     let aiState: String
     let bridgeText: String
     let lastAction: String
@@ -370,12 +374,14 @@ final class LegoClawdController {
     func snapshot() -> StatusSnapshot {
         let ports = serialPorts()
         let state = readAIState()
+        let deviceText = readDeviceStatus()
         let bridgeRunning = isBridgeRunning()
         let portText = ports.isEmpty ? "no serial device" : ports.joined(separator: ", ")
         return StatusSnapshot(
             isConnected: !ports.isEmpty,
             bridgeRunning: bridgeRunning,
             connectionText: portText,
+            deviceText: deviceText,
             aiState: state,
             bridgeText: bridgeRunning ? "running" : "stopped",
             lastAction: lastAction
@@ -410,7 +416,7 @@ final class LegoClawdController {
     }
 
     func sendState(_ state: String) {
-        runWithBridgePaused(label: "State \(state)") {
+        runWithBridgePaused(label: "State \(state)", resumeDelay: 5.0) {
             _ = self.runCommand(
                 self.bridgeScript.path,
                 ["--once", "--state", state],
@@ -440,7 +446,7 @@ final class LegoClawdController {
     }
 
     func selfTest() {
-        runWithBridgePaused(label: "Self-test") {
+        runWithBridgePaused(label: "Self-test", resumeDelay: 35.0) {
             _ = self.runCommand(
                 self.bridgeScript.path,
                 ["--once", "--self-test"],
@@ -450,7 +456,7 @@ final class LegoClawdController {
     }
 
     func showUsage() {
-        runWithBridgePaused(label: "Show usage") {
+        runWithBridgePaused(label: "Show usage", resumeDelay: 10.0) {
             _ = self.runCommand(
                 self.bridgeScript.path,
                 ["--once", "--show-usage"],
@@ -459,13 +465,16 @@ final class LegoClawdController {
         }
     }
 
-    private func runWithBridgePaused(label: String, action: () -> Void) {
+    private func runWithBridgePaused(label: String, resumeDelay: TimeInterval = 0, action: () -> Void) {
         let wasRunning = isBridgeRunning()
         if wasRunning {
             stopBridge(notifyDevice: false)
         }
         action()
         lastAction = "\(label): sent"
+        if wasRunning && resumeDelay > 0 {
+            Thread.sleep(forTimeInterval: resumeDelay)
+        }
         if wasRunning {
             startBridge()
         }
@@ -517,6 +526,39 @@ final class LegoClawdController {
             return "pending"
         }
         return "idle"
+    }
+
+    private func readDeviceStatus() -> String {
+        let url = projectRoot.appendingPathComponent(".lego-clawd/device-status.json")
+        guard let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "unknown"
+        }
+
+        var parts: [String] = []
+        if let temp = json["temperatureC"] as? Double {
+            parts.append(String(format: "ESP32 %.1f C", temp))
+        } else if let temp = json["temperatureC"] as? Int {
+            parts.append("ESP32 \(temp) C")
+        } else {
+            parts.append("ESP32 -- C")
+        }
+
+        if let lcd = json["lcd"] as? String {
+            if let backlight = json["backlightPercent"] as? Int {
+                parts.append("LCD \(lcd) \(backlight)%")
+            } else {
+                parts.append("LCD \(lcd)")
+            }
+        }
+
+        if let updatedAt = json["updatedAt"] as? String,
+           let date = ISO8601DateFormatter().date(from: updatedAt),
+           Date().timeIntervalSince(date) > 45 {
+            parts.append("stale")
+        }
+
+        return parts.joined(separator: " | ")
     }
 
     private func runCommand(_ executable: String, _ arguments: [String], timeout: Int) -> Int32 {

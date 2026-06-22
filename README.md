@@ -57,7 +57,7 @@ Avoid these GPIOs for the servo signal:
 - `src/servo_arm.*`: servo movement
 - `src/persistent_settings.*`: ESP32 NVS-backed settings such as quiet mode
 - `src/app_state.h`: shared app state
-- `tools/codexbar_bridge.py`: host bridge from CodexBar usage JSON to serial
+- `tools/codex_usage_bridge.py`: host bridge from Codex usage to serial
 - `tools/run-bridge.sh`: wrapper that finds the serial port and runs the bridge
 - `tools/codex_status_hook.py`: Codex hook state writer
 - `tools/install_codex_hooks.py`: installs Codex hook config
@@ -131,6 +131,17 @@ Supported keys:
 - `quietMode` or `quiet`: suppress servo motion while keeping LCD updates active
 - `selfTest`: when `true`, runs the end-to-end firmware self-test
 
+The firmware also writes a device telemetry JSON object to serial every 10
+seconds. The bridge stores it at `.lego-clawd/device-status.json` for the menu
+bar app:
+
+```json
+{"deviceStatus":true,"temperatureC":42.1,"lcd":"on","backlightPercent":100,"uptimeMs":12345}
+```
+
+`temperatureC` is the ESP32 internal temperature sensor reading. It is useful as
+a chip heat trend, not as an exact LCD surface temperature.
+
 Activity behavior:
 
 | State | Screen behavior | Servo behavior |
@@ -154,6 +165,12 @@ receive a serial update for 5 minutes, it switches to `disconnected`; the bridge
 sends a 10-second heartbeat while running so a stable unchanged state does not
 look disconnected.
 
+While idle, the firmware reuses its idle timer to reduce LCD heat: after 2
+minutes it dims the backlight to 25%, and after 10 minutes it turns the LCD off
+with the ST7789 sleep command. Working, approval, waiting, error, disconnected,
+self-test, manual servo calibration, or manual usage display wakes the LCD and
+restores full brightness.
+
 ## Host Bridge
 
 Run the bridge from the repo root:
@@ -162,18 +179,18 @@ Run the bridge from the repo root:
 ./tools/run-bridge.sh
 ```
 
-The bridge reads CodexBar usage from:
+The bridge reads Codex usage in `auto` mode by default:
 
-```text
-~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json
-```
+1. Codex CLI app-server JSON-RPC `account/rateLimits/read`
+2. Codex auth fallback from `$CODEX_HOME/auth.json` or `~/.codex/auth.json`
 
-It maps the `codex` provider:
+All sources are normalized to `.lego-clawd/usage-state.json`, then converted to
+the stable ESP32 serial fields:
 
-- `primary.leftPercent` -> `codex5h`
-- `secondary.leftPercent` -> `codex1w`
-- `primary.resetsAt` -> `reset5h`
-- `secondary.resetsAt` -> `reset1w`
+- 5-hour remaining percent -> `codex5h`
+- weekly remaining percent -> `codex1w`
+- 5-hour reset time -> `reset5h`
+- weekly reset date -> `reset1w`
 
 The bridge reads AI state from:
 
@@ -184,8 +201,9 @@ The bridge reads AI state from:
 ## macOS Menu Bar App
 
 A lightweight native menu bar controller is available under
-`macos/LegoClawdBar`. It shows board connection, AI state, and bridge status,
-and can run common hardware actions without opening a terminal.
+`macos/LegoClawdBar`. It shows board connection, ESP32 temperature, LCD power,
+AI state, and bridge status, and can run common hardware actions without opening
+a terminal.
 
 Run from source:
 
@@ -220,7 +238,9 @@ omit `--quiet-mode` unless you explicitly want to change the board's stored
 quiet setting.
 `Test Approval` holds approval for 6 seconds, then returns the firmware to idle.
 When tests run while bridge is active, the app pauses bridge, sends the test, and
-restarts bridge with the menu's current quiet setting.
+waits long enough for the test view to be visible before restarting bridge with
+the menu's current quiet setting. Firmware self-test also ignores normal bridge
+state payloads until its demo sequence completes.
 
 The app uses the repo root from `LEGO_CLAWD_PROJECT_ROOT` when present. If the
 environment variable is not set, it falls back to this iCloud project path:
@@ -258,7 +278,7 @@ Pending wave tuning can be sent without recompiling:
 ./tools/run-bridge.sh --approval-test 15 --pending-wave-forward-pulse-us 1125 --pending-wave-pause-ms 300
 ```
 
-`--self-test` reads the latest CodexBar usage first, then sends that usage data
+`--self-test` reads the latest Codex usage first, then sends that usage data
 together with `selfTest: true`. Sending raw `{"selfTest":true}` over serial only
 reuses whatever usage values are already cached on the device.
 

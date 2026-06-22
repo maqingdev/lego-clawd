@@ -34,8 +34,11 @@ bool DisplayUi::begin() {
     return false;
   }
 
-  pinMode(Config::LcdBacklightPin, OUTPUT);
-  digitalWrite(Config::LcdBacklightPin, LOW);
+  ledcSetup(Config::LcdBacklightPwmChannel,
+            Config::LcdBacklightPwmFrequency,
+            Config::LcdBacklightPwmResolutionBits);
+  ledcAttachPin(Config::LcdBacklightPin, Config::LcdBacklightPwmChannel);
+  setBacklightPercent(Config::LcdBacklightFullPercent);
   gfx->fillScreen(Black);
   return true;
 }
@@ -132,6 +135,36 @@ void DisplayUi::renderUsageSummary(const UsageWindow &codex5h, const UsageWindow
 
 void DisplayUi::renderFooter(const AppState &state) {
   drawFooter(state);
+}
+
+void DisplayUi::setBacklightPercent(uint8_t percent) {
+  backlightPercent_ = constrain(percent, 0, 100);
+  constexpr uint16_t MaxDuty =
+      (1 << Config::LcdBacklightPwmResolutionBits) - 1;
+  const uint16_t duty =
+      MaxDuty - static_cast<uint16_t>(MaxDuty * backlightPercent_ / 100);
+  ledcWrite(Config::LcdBacklightPwmChannel, duty);
+}
+
+void DisplayUi::sleep() {
+  if (sleeping_) {
+    return;
+  }
+
+  setBacklightPercent(0);
+  gfx->displayOff();
+  sleeping_ = true;
+}
+
+void DisplayUi::wake() {
+  if (!sleeping_) {
+    setBacklightPercent(Config::LcdBacklightFullPercent);
+    return;
+  }
+
+  gfx->displayOn();
+  sleeping_ = false;
+  setBacklightPercent(Config::LcdBacklightFullPercent);
 }
 
 uint16_t DisplayUi::rgb(uint8_t red, uint8_t green, uint8_t blue) const {
