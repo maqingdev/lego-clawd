@@ -13,11 +13,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let bridgeItem = NSMenuItem(title: "Bridge: stopped", action: nil, keyEquivalent: "")
     private let connectionItem = NSMenuItem(title: "Serial: checking...", action: nil, keyEquivalent: "")
     private let deviceItem = NSMenuItem(title: "Device: unknown", action: nil, keyEquivalent: "")
+    private let usageFiveHourItem = NSMenuItem(title: "5h --%", action: nil, keyEquivalent: "")
+    private let usageWeeklyItem = NSMenuItem(title: "1w --%", action: nil, keyEquivalent: "")
     private let aiStateItem = NSMenuItem(title: "State: unknown", action: nil, keyEquivalent: "")
     private let lastActionItem = NSMenuItem(title: "Last: none", action: nil, keyEquivalent: "")
     private let connectBridgeItem = NSMenuItem(title: "Connect Bridge", action: nil, keyEquivalent: "")
     private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Bridge", action: nil, keyEquivalent: "")
+    private let refreshUsageItem = NSMenuItem(title: "Refresh Usage", action: nil, keyEquivalent: "u")
     private let quietModeItem = NSMenuItem(title: "Quiet Mode", action: nil, keyEquivalent: "m")
+    private let testStatesItem = NSMenuItem(title: "State Tests", action: nil, keyEquivalent: "")
     private let testIdleItem = NSMenuItem(title: "Test Idle", action: nil, keyEquivalent: "1")
     private let testWorkingItem = NSMenuItem(title: "Test Working", action: nil, keyEquivalent: "2")
     private let testApprovalItem = NSMenuItem(title: "Test Approval", action: nil, keyEquivalent: "3")
@@ -26,16 +30,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let testUsageItem = NSMenuItem(title: "Test Show Usage", action: nil, keyEquivalent: "6")
     private let selfTestItem = NSMenuItem(title: "Self-Test", action: nil, keyEquivalent: "s")
 
-    private var testItems: [NSMenuItem] {
+    private var testStateItems: [NSMenuItem] {
         [
             testIdleItem,
             testWorkingItem,
             testApprovalItem,
             testDoneItem,
             testErrorItem,
-            testUsageItem,
-            selfTestItem
+            testUsageItem
         ]
+    }
+
+    private var testItems: [NSMenuItem] {
+        [testStatesItem] + testStateItems + [selfTestItem]
     }
 
     static func main() {
@@ -46,9 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
         setupMenu()
         refreshStatus()
-        showLaunchDockCue()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshStatus()
@@ -59,14 +66,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         statusItem.button?.performClick(nil)
         return false
-    }
-
-    private func showLaunchDockCue() {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.requestUserAttention(.informationalRequest)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            NSApp.setActivationPolicy(.accessory)
-        }
     }
 
     private func setupMenu() {
@@ -90,6 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(lastActionItem)
         menu.addItem(.separator())
 
+        menu.addItem(groupHeader("Usage"))
+        menu.addItem(usageFiveHourItem)
+        menu.addItem(usageWeeklyItem)
+        menu.addItem(refreshUsageItem)
+        menu.addItem(.separator())
+
         menu.addItem(groupHeader("Actions"))
         menu.addItem(connectBridgeItem)
         menu.addItem(disconnectBridgeItem)
@@ -97,12 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         menu.addItem(groupHeader("Test"))
-        menu.addItem(testIdleItem)
-        menu.addItem(testWorkingItem)
-        menu.addItem(testApprovalItem)
-        menu.addItem(testDoneItem)
-        menu.addItem(testErrorItem)
-        menu.addItem(testUsageItem)
+        let testStatesMenu = NSMenu()
+        testStateItems.forEach { testStatesMenu.addItem($0) }
+        testStatesItem.submenu = testStatesMenu
+        menu.addItem(testStatesItem)
         menu.addItem(selfTestItem)
         menu.addItem(.separator())
 
@@ -115,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         bridgeItem.toolTip = "Toggle bridge connection"
         connectBridgeItem.action = #selector(connectBridge)
         disconnectBridgeItem.action = #selector(disconnectBridge)
+        refreshUsageItem.action = #selector(refreshUsage)
         quietModeItem.action = #selector(toggleQuietMode)
         testIdleItem.action = #selector(testIdle)
         testWorkingItem.action = #selector(testWorking)
@@ -123,8 +127,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         testErrorItem.action = #selector(testError)
         testUsageItem.action = #selector(testUsage)
         selfTestItem.action = #selector(selfTest)
+        testStateItems.forEach { $0.target = self }
 
-        [connectionItem, deviceItem, aiStateItem, lastActionItem].forEach { item in
+        [connectionItem, deviceItem, usageFiveHourItem, usageWeeklyItem, aiStateItem, lastActionItem].forEach { item in
             item.isEnabled = false
             item.target = nil
             item.action = nil
@@ -159,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         bridgeItem.isEnabled = snapshot.isConnected || snapshot.bridgeRunning
         connectBridgeItem.isEnabled = snapshot.isConnected && !snapshot.bridgeRunning
         disconnectBridgeItem.isEnabled = snapshot.bridgeRunning
+        refreshUsageItem.isEnabled = true
         quietModeItem.isEnabled = snapshot.isConnected
         quietModeItem.state = controller.quietMode ? .on : .off
         testItems.forEach { $0.isEnabled = snapshot.isConnected }
@@ -171,8 +177,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         connectionItem.title = "Serial: \(snapshot.connectionText)"
         deviceItem.title = "Device: \(snapshot.deviceText)"
+        usageFiveHourItem.attributedTitle = usageWindowTitle(
+            main: snapshot.usageFiveHourText,
+            reset: snapshot.usageFiveHourResetText,
+            stale: snapshot.usageIsStale
+        )
+        usageWeeklyItem.attributedTitle = usageWindowTitle(
+            main: snapshot.usageWeeklyText,
+            reset: snapshot.usageWeeklyResetText,
+            stale: snapshot.usageIsStale
+        )
         aiStateItem.title = "State: \(snapshot.aiState)"
         lastActionItem.title = "Last: \(snapshot.lastAction)"
+
+        if snapshot.usageNeedsRefresh {
+            controller.refreshUsageIfNeeded { [weak self] result in
+                Task { @MainActor in
+                    if result != 0 {
+                        self?.controller.lastAction = "Usage refresh failed: \(result)"
+                    }
+                    self?.refreshStatus()
+                }
+            }
+        }
     }
 
     private func loadMenuBarImage() -> NSImage? {
@@ -236,6 +263,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return result
     }
 
+    private func usageWindowTitle(main: String, reset: String, stale: Bool) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 1
+        result.append(NSAttributedString(
+            string: "\(main)\n",
+            attributes: [
+                .foregroundColor: NSColor.labelColor,
+                .font: NSFont.menuFont(ofSize: NSFont.systemFontSize),
+                .paragraphStyle: paragraph
+            ]
+        ))
+        result.append(NSAttributedString(
+            string: stale ? "\(reset) · Stale" : reset,
+            attributes: [
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .font: NSFont.menuFont(ofSize: 11),
+                .paragraphStyle: paragraph
+            ]
+        ))
+        return result
+    }
+
     private func bridgeDotColor(_ snapshot: StatusSnapshot) -> NSColor {
         if snapshot.bridgeRunning {
             return .systemGreen
@@ -277,6 +327,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func disconnectBridge() {
         runAction("Disconnect") {
             self.controller.stopBridge(notifyDevice: true)
+        }
+    }
+
+    @objc private func refreshUsage() {
+        controller.lastAction = "Usage refresh: running"
+        refreshStatus()
+        controller.refreshUsage(force: true) { [weak self] result in
+            Task { @MainActor in
+                self?.controller.lastAction = result == 0
+                    ? "Usage refresh: updated"
+                    : "Usage refresh failed: \(result)"
+                self?.refreshStatus()
+            }
         }
     }
 
@@ -341,6 +404,12 @@ struct StatusSnapshot {
     let bridgeRunning: Bool
     let connectionText: String
     let deviceText: String
+    let usageFiveHourText: String
+    let usageFiveHourResetText: String
+    let usageWeeklyText: String
+    let usageWeeklyResetText: String
+    let usageIsStale: Bool
+    let usageNeedsRefresh: Bool
     let aiState: String
     let bridgeText: String
     let lastAction: String
@@ -349,8 +418,12 @@ struct StatusSnapshot {
 final class LegoClawdController {
     private let projectRoot: URL
     private let bridgeScript: URL
+    private let usageBridge: URL
     private let bridgePython: URL
+    private let usagePython: URL
     private let bridgeControl: URL
+    private var usageRefreshInFlight = false
+    private var lastUsageRefreshAttempt: Date?
 
     var lastAction = "none"
     var quietMode: Bool {
@@ -366,15 +439,21 @@ final class LegoClawdController {
         let rootPath = envRoot?.isEmpty == false ? envRoot! : fallbackRoot
         projectRoot = URL(fileURLWithPath: rootPath)
         bridgeScript = projectRoot.appendingPathComponent("tools/run-bridge.sh")
+        usageBridge = projectRoot.appendingPathComponent("tools/codex_usage_bridge.py")
         bridgeControl = projectRoot.appendingPathComponent("tools/bridge-control.py")
         bridgePython = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".platformio/penv/bin/python")
+        let systemPython = URL(fileURLWithPath: "/usr/bin/python3")
+        usagePython = FileManager.default.isExecutableFile(atPath: systemPython.path)
+            ? systemPython
+            : bridgePython
     }
 
     func snapshot() -> StatusSnapshot {
         let ports = serialPorts()
         let state = readAIState()
         let deviceText = readDeviceStatus()
+        let usageStatus = readUsageStatus()
         let bridgeRunning = isBridgeRunning()
         let portText = ports.isEmpty ? "no serial device" : ports.joined(separator: ", ")
         return StatusSnapshot(
@@ -382,10 +461,61 @@ final class LegoClawdController {
             bridgeRunning: bridgeRunning,
             connectionText: portText,
             deviceText: deviceText,
+            usageFiveHourText: usageStatus.fiveHourText,
+            usageFiveHourResetText: usageStatus.fiveHourResetText,
+            usageWeeklyText: usageStatus.weeklyText,
+            usageWeeklyResetText: usageStatus.weeklyResetText,
+            usageIsStale: usageStatus.isStale,
+            usageNeedsRefresh: usageStatus.needsRefresh,
             aiState: state,
             bridgeText: bridgeRunning ? "running" : "stopped",
             lastAction: lastAction
         )
+    }
+
+    func refreshUsageIfNeeded(completion: @escaping (Int32) -> Void) {
+        refreshUsage(force: false, completion: completion)
+    }
+
+    func refreshUsage(force: Bool, completion: @escaping (Int32) -> Void) {
+        guard !usageRefreshInFlight else {
+            return
+        }
+        if !force,
+           let lastUsageRefreshAttempt,
+           Date().timeIntervalSince(lastUsageRefreshAttempt) < 300 {
+            return
+        }
+
+        usageRefreshInFlight = true
+        lastUsageRefreshAttempt = Date()
+        let executable = usagePython.path
+        let script = usageBridge.path
+        let usageState = projectRoot.appendingPathComponent(".lego-clawd/usage-state.json").path
+        let logFile = projectRoot.appendingPathComponent(".lego-clawd/bridge.log").path
+        DispatchQueue.global(qos: .utility).async {
+            let result = self.runStatusCommand(
+                executable,
+                [
+                    script,
+                    "--dry-run",
+                    "--once",
+                    "--state",
+                    "idle",
+                    "--usage-source",
+                    "codex-auth",
+                    "--usage-state-file",
+                    usageState,
+                    "--log-file",
+                    logFile
+                ],
+                timeout: 20
+            )
+            DispatchQueue.main.async {
+                self.usageRefreshInFlight = false
+                completion(result)
+            }
+        }
     }
 
     func startBridge() {
@@ -561,6 +691,97 @@ final class LegoClawdController {
         return parts.joined(separator: " | ")
     }
 
+    private struct UsageMenuStatus {
+        let fiveHourText: String
+        let fiveHourResetText: String
+        let weeklyText: String
+        let weeklyResetText: String
+        let isStale: Bool
+        let needsRefresh: Bool
+    }
+
+    private func readUsageStatus() -> UsageMenuStatus {
+        let url = projectRoot.appendingPathComponent(".lego-clawd/usage-state.json")
+        guard let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return UsageMenuStatus(
+                fiveHourText: "5h --%",
+                fiveHourResetText: "Reset --",
+                weeklyText: "1w --%",
+                weeklyResetText: "Reset --",
+                isStale: true,
+                needsRefresh: true
+            )
+        }
+
+        let fiveHour = usageWindowText(json["fiveHour"], label: "5h", resetStyle: .time)
+        let weekly = usageWindowText(json["weekly"], label: "1w", resetStyle: .date)
+        var isStale = false
+
+        if let updatedAt = json["updatedAt"] as? String,
+           let date = ISO8601DateFormatter().date(from: updatedAt),
+           Date().timeIntervalSince(date) > 420 {
+            isStale = true
+        }
+
+        if let stale = json["stale"] as? Bool, stale {
+            isStale = true
+        }
+
+        return UsageMenuStatus(
+            fiveHourText: fiveHour.main,
+            fiveHourResetText: fiveHour.reset,
+            weeklyText: weekly.main,
+            weeklyResetText: weekly.reset,
+            isStale: isStale,
+            needsRefresh: isStale
+        )
+    }
+
+    private enum UsageResetStyle {
+        case time
+        case date
+    }
+
+    private func usageWindowText(_ value: Any?, label: String, resetStyle: UsageResetStyle) -> (main: String, reset: String) {
+        guard let window = value as? [String: Any] else {
+            return ("\(label) --%", "Reset --")
+        }
+
+        let remaining = intValue(window["remainingPercent"]).map { "\($0)%" } ?? "--%"
+        let reset = resetText(window["resetAt"], style: resetStyle)
+        return ("\(label) \(remaining)", "Reset \(reset)")
+    }
+
+    private func resetText(_ value: Any?, style: UsageResetStyle) -> String {
+        guard let text = value as? String, !text.isEmpty else {
+            return "--"
+        }
+        guard let date = ISO8601DateFormatter().date(from: text) else {
+            return text
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        switch style {
+        case .time:
+            formatter.dateFormat = "HH:mm"
+        case .date:
+            formatter.dateFormat = "MMM d"
+        }
+        return formatter.string(from: date)
+    }
+
+    private func intValue(_ value: Any?) -> Int? {
+        if let int = value as? Int {
+            return int
+        }
+        if let double = value as? Double {
+            return Int(double.rounded())
+        }
+        return nil
+    }
+
     private func runCommand(_ executable: String, _ arguments: [String], timeout: Int) -> Int32 {
         let process = Process()
         process.currentDirectoryURL = projectRoot
@@ -573,6 +794,35 @@ final class LegoClawdController {
             try process.run()
         } catch {
             lastAction = "Command failed: \(error.localizedDescription)"
+            return 127
+        }
+
+        let deadline = Date().addingTimeInterval(TimeInterval(timeout))
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        if process.isRunning {
+            process.terminate()
+            waitForExit(process, timeout: 1.0)
+            if process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+            }
+            return 124
+        }
+        return process.terminationStatus
+    }
+
+    private func runStatusCommand(_ executable: String, _ arguments: [String], timeout: Int) -> Int32 {
+        let process = Process()
+        process.currentDirectoryURL = projectRoot
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+        } catch {
             return 127
         }
 

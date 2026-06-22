@@ -202,8 +202,8 @@ The bridge reads AI state from:
 
 A lightweight native menu bar controller is available under
 `macos/LegoClawdBar`. It shows board connection, ESP32 temperature, LCD power,
-AI state, and bridge status, and can run common hardware actions without opening
-a terminal.
+Codex usage, AI state, and bridge status, and can run common hardware actions
+without opening a terminal.
 
 Run from source:
 
