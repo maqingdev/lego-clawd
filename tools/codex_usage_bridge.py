@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bridge CodexBar usage JSON to the Lego Clawd ESP32 over USB serial."""
+"""Bridge Codex usage and activity state to the Lego Clawd ESP32 over USB serial."""
 
 from __future__ import annotations
 
@@ -13,19 +13,52 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_USAGE_FILE = (
-    Path.home()
-    / "Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json"
-)
+import codex_usage
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_AI_STATUS_FILE = Path.home() / ".lego-clawd/ai-status.json"
+DEFAULT_DEVICE_STATUS_FILE = PROJECT_ROOT / ".lego-clawd/device-status.json"
 ACTIVITIES = ("idle", "working", "pending", "waiting", "error", "disconnected")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Send CodexBar usage data to Lego Clawd over serial."
+        description="Send Codex usage data to Lego Clawd over serial."
     )
-    parser.add_argument("--usage-file", type=Path, default=DEFAULT_USAGE_FILE)
+    parser.add_argument(
+        "--usage-source",
+        choices=codex_usage.USAGE_SOURCES,
+        default="auto",
+        help="Codex usage source. auto tries Codex CLI RPC, then Codex auth.",
+    )
+    parser.add_argument(
+        "--usage-state-file",
+        type=Path,
+        default=codex_usage.DEFAULT_USAGE_STATE_FILE,
+        help="Write normalized Codex usage state to this JSON file.",
+    )
+    parser.add_argument(
+        "--codex-home",
+        type=Path,
+        help="Codex home directory for auth.json fallback. Defaults to $CODEX_HOME or ~/.codex.",
+    )
+    parser.add_argument(
+        "--codex-cli",
+        default="codex",
+        help="Codex CLI executable used for app-server RPC.",
+    )
+    parser.add_argument(
+        "--codex-rpc-timeout",
+        type=float,
+        default=5.0,
+        help="Seconds to wait for Codex app-server RPC usage reads.",
+    )
+    parser.add_argument(
+        "--codex-auth-timeout",
+        type=float,
+        default=10.0,
+        help="Seconds to wait for Codex auth usage endpoint reads.",
+    )
     parser.add_argument("--port", help="Serial port, for example /dev/cu.usbmodem1101")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument(
@@ -37,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--usage-interval",
         type=float,
-        default=60.0,
+        default=300.0,
         help="Seconds between Codex usage file refreshes.",
     )
     parser.add_argument(
@@ -90,6 +123,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--ai-status-file", type=Path, default=DEFAULT_AI_STATUS_FILE)
     parser.add_argument(
+        "--device-status-file",
+        type=Path,
+        default=DEFAULT_DEVICE_STATUS_FILE,
+        help="Write ESP32 telemetry received over serial to this JSON file.",
+    )
+    parser.add_argument(
         "--waiting-file",
         type=Path,
         help="Legacy file containing true/false, 1/0, waiting/idle.",
@@ -131,50 +170,11 @@ def load_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def codex_provider(data: dict[str, Any]) -> dict[str, Any]:
-    providers = data.get("providers")
-    if not isinstance(providers, list):
-        raise ValueError("missing providers array")
-
-    for provider in providers:
-        if isinstance(provider, dict) and provider.get("provider") == "codex":
-            return provider
-
-    raise ValueError("missing provider == codex")
-
-
-def percent(window: Any) -> int:
-    if not isinstance(window, dict):
-        return 100
-
-    value = window.get("leftPercent")
-    if value is None:
-        used = window.get("usedPercent")
-        value = 100 - used if isinstance(used, (int, float)) else 100
-
-    return max(0, min(100, int(round(float(value)))))
-
-
-def format_reset(window: Any, display: str) -> str:
-    if not isinstance(window, dict):
-        return "--:--"
-
-    resets_at = window.get("resetsAt")
-    if isinstance(resets_at, str) and resets_at:
-        try:
-            reset_time = datetime.fromisoformat(resets_at.replace("Z", "+00:00"))
-            local_time = reset_time.astimezone()
-            if display == "time":
-                return local_time.strftime("%H:%M")
-            return local_time.strftime("%b %d")
-        except ValueError:
-            pass
-
-    description = window.get("resetDescription")
-    if isinstance(description, str) and description:
-        return description.replace("Resets ", "")
-
-    return "--:--"
+def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(data, separators=(",", ":")) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
 
 
 def normalize_activity(
@@ -275,17 +275,8 @@ def read_activity(args: argparse.Namespace, status: dict[str, Any] | None = None
 
 
 def build_usage_payload(args: argparse.Namespace) -> dict[str, Any]:
-    data = load_json(args.usage_file)
-    codex = codex_provider(data)
-    primary = codex.get("primary")
-    secondary = codex.get("secondary")
-
-    return {
-        "codex5h": percent(primary),
-        "codex1w": percent(secondary),
-        "reset5h": format_reset(primary, "time"),
-        "reset1w": format_reset(secondary, "date"),
-    }
+    usage = codex_usage.read_usage(args, emit=emit)
+    return codex_usage.to_serial_payload(usage)
 
 
 def build_status_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -419,6 +410,22 @@ def main() -> int:
     last_sent_at = 0.0
     serial_rx_buffer = bytearray()
 
+    def record_device_status(text: str) -> None:
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return
+        if not isinstance(data, dict) or not data.get("deviceStatus"):
+            return
+
+        data["updatedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        if port:
+            data["port"] = port
+        try:
+            write_json_atomic(args.device_status_file, data)
+        except OSError as error:
+            emit(f"device status write failed: {error}", args.log_file, error=True)
+
     def drain_serial_input() -> None:
         nonlocal serial_rx_buffer
         if args.dry_run or serial_conn is None or port is None:
@@ -434,6 +441,7 @@ def main() -> int:
             serial_rx_buffer = bytearray(rest)
             text = raw_line.replace(b"\r", b"").decode("utf-8", errors="replace").strip()
             if text:
+                record_device_status(text)
                 emit(f"{port} -> {text}", args.log_file)
 
         if len(serial_rx_buffer) > 512:
@@ -536,5 +544,5 @@ if __name__ == "__main__":
             index = sys.argv.index("--log-file")
             if index + 1 < len(sys.argv):
                 log_path = Path(sys.argv[index + 1])
-        emit(f"codexbar bridge: {error}", log_path, error=True)
+        emit(f"codex usage bridge: {error}", log_path, error=True)
         raise SystemExit(1)

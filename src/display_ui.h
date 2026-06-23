@@ -30,6 +30,11 @@ class DisplayUi {
   void renderUsageSummary(const UsageWindow &codex5h, const UsageWindow &codex1w,
                           AiActivity activity, int16_t idleInSeconds);
   void renderFooter(const AppState &state);
+  void setBacklightPercent(uint8_t percent);
+  uint8_t backlightPercent() const { return backlightPercent_; }
+  void sleep();
+  void wake();
+  bool isSleeping() const { return sleeping_; }
 
  private:
   uint16_t rgb(uint8_t red, uint8_t green, uint8_t blue) const;
@@ -57,4 +62,6 @@ class DisplayUi {
   void drawUsageBlock(int16_t x, const char *label, const UsageWindow &window);
   void drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent);
   uint16_t percentColor(uint8_t percent) const;
+  uint8_t backlightPercent_ = Config::LcdBacklightFullPercent;
+  bool sleeping_ = false;
 };

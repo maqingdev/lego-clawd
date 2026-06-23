@@ -7,6 +7,7 @@ import argparse
 import glob
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -18,12 +19,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = PROJECT_ROOT / ".lego-clawd"
 PID_FILE = STATE_DIR / "bridge.pid"
 LOG_FILE = STATE_DIR / "bridge.log"
-BRIDGE = PROJECT_ROOT / "tools/codexbar_bridge.py"
-USAGE_FILE = (
-    Path.home()
-    / "Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/codexbar-usage.json"
-)
+BRIDGE = PROJECT_ROOT / "tools/codex_usage_bridge.py"
 AI_STATUS_FILE = Path.home() / ".lego-clawd/ai-status.json"
+DEVICE_STATUS_FILE = STATE_DIR / "device-status.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -115,9 +113,25 @@ def bridge_owner_pids(port: str | None) -> set[int]:
     pids: set[int] = set()
     for pid in serial_owner_pids(port):
         command = process_command(pid)
-        if bridge_path in command or "codexbar_bridge.py" in command:
+        if bridge_path in command or "codex_usage_bridge.py" in command:
             pids.add(pid)
     return pids
+
+
+def find_codex_cli() -> str:
+    env_path = os.environ.get("CODEX_CLI")
+    if env_path:
+        return env_path
+
+    for candidate in (
+        Path.home() / ".local/bin/codex",
+        Path("/opt/homebrew/bin/codex"),
+        Path("/usr/local/bin/codex"),
+    ):
+        if candidate.exists():
+            return str(candidate)
+
+    return shutil.which("codex") or "codex"
 
 
 def status() -> dict[str, Any]:
@@ -167,14 +181,16 @@ def start(port: str | None, quiet_mode: str | None = None) -> int:
             str(BRIDGE),
             "--port",
             port,
-            "--usage-file",
-            str(USAGE_FILE),
             "--ai-status-file",
             str(AI_STATUS_FILE),
+            "--device-status-file",
+            str(DEVICE_STATUS_FILE),
+            "--codex-cli",
+            find_codex_cli(),
             "--state-interval",
             "1",
             "--usage-interval",
-            "60",
+            "300",
             "--log-file",
             str(LOG_FILE),
         ]

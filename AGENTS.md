@@ -19,7 +19,7 @@ long command explanations in `README.md`.
 - Servo motion: `src/servo_arm.*`
 - Persistent ESP32 settings: `src/persistent_settings.*`
 - Shared state: `src/app_state.h`
-- Host bridge: `tools/codexbar_bridge.py`, `tools/run-bridge.sh`
+- Host bridge: `tools/codex_usage_bridge.py`, `tools/run-bridge.sh`
 - macOS menu bar app: `macos/LegoClawdBar`
 
 ## Firmware Rules

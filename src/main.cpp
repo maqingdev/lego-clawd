@@ -30,6 +30,7 @@ uint32_t nextWorkingBlinkMs = 0;
 uint32_t nextWorkingStrainMs = 0;
 uint32_t nextPendingAttentionMs = 0;
 uint32_t bootingStartedMs = 0;
+uint32_t lastDeviceStatusSentMs = 0;
 uint8_t lastWorkingFaceLevel = 0;
 bool workingStrained = false;
 bool pendingAttentionActive = false;
@@ -39,6 +40,14 @@ bool selfTestActive = false;
 bool bootingScreenActive = true;
 uint8_t selfTestStep = 0;
 uint32_t selfTestStepStartedMs = 0;
+
+enum class LcdPowerState : uint8_t {
+  On,
+  Dim,
+  Off,
+};
+
+LcdPowerState lcdPowerState = LcdPowerState::On;
 
 struct SelfTestStep {
   AiActivity activity;
@@ -62,6 +71,7 @@ constexpr SelfTestStep SelfTestSteps[] = {
 constexpr uint8_t SelfTestStepCount = sizeof(SelfTestSteps) / sizeof(SelfTestSteps[0]);
 
 void renderCurrentScreen();
+void sendDeviceStatus(uint32_t now, bool force = false);
 
 EyeExpression randomEyeExpression(bool allowSleep) {
   switch (random(0, allowSleep ? 9 : 7)) {
@@ -114,6 +124,28 @@ bool idleCanSleep(uint32_t now) {
   return idleStartedMs > 0 && now - idleStartedMs >= Config::IdleSleepDelayMs;
 }
 
+bool idleShouldDim(uint32_t now) {
+  return idleStartedMs > 0 && now - idleStartedMs >= Config::LcdDimAfterIdleMs;
+}
+
+bool deviceIsActive() {
+  return bootingScreenActive || selfTestActive || manualUsageActive ||
+         state.servoPulseUs >= 0 || state.showUsageRequested ||
+         state.selfTestRequested || state.aiActivity != AiActivity::Idle;
+}
+
+const char *lcdPowerStateText() {
+  switch (lcdPowerState) {
+    case LcdPowerState::Dim:
+      return "dim";
+    case LcdPowerState::Off:
+      return "off";
+    case LcdPowerState::On:
+    default:
+      return "on";
+  }
+}
+
 void startUsagePeekCue(uint32_t now) {
   manualUsageActive = false;
   usagePeekCueActive = true;
@@ -134,6 +166,10 @@ void showUsageSummary(uint32_t now) {
 }
 
 void renderCurrentScreen() {
+  if (display.isSleeping()) {
+    return;
+  }
+
   if (bootingScreenActive && screen == ScreenMode::Face) {
     display.renderBooting(state);
     return;
@@ -229,12 +265,17 @@ void updateScreenSchedule(uint32_t now) {
     return;
   }
 
-  if (now - lastScreenSwitchMs >= Config::UsagePeekIntervalMs) {
+  if (!idleShouldDim(now) &&
+      now - lastScreenSwitchMs >= Config::UsagePeekIntervalMs) {
     startUsagePeekCue(now);
   }
 }
 
 void updateFaceExpression(uint32_t now) {
+  if (display.isSleeping()) {
+    return;
+  }
+
   if (bootingScreenActive) {
     return;
   }
@@ -454,6 +495,19 @@ void applySelfTestStep() {
   Serial.println(SelfTestStepCount);
 }
 
+void restoreSelfTestStepState() {
+  const SelfTestStep &step = SelfTestSteps[selfTestStep];
+  state.aiActivity = step.activity;
+  state.aiWaitingForInput = step.activity == AiActivity::Waiting;
+  state.activityElapsedSeconds = step.activity == AiActivity::Idle ? -1 : 0;
+  state.servoPulseUs = -1;
+  state.selfTestRequested = false;
+  state.showUsageRequested = false;
+  screen = step.screenMode;
+  eyeExpression = step.expression;
+  blinkUntilMs = 0;
+}
+
 void startSelfTest(uint32_t now) {
   selfTestActive = true;
   selfTestStep = 0;
@@ -544,6 +598,67 @@ void updateBootingScreen(uint32_t now) {
   renderCurrentScreen();
 }
 
+void updateDisplayPower(uint32_t now) {
+  const LcdPowerState previousState = lcdPowerState;
+
+  if (deviceIsActive()) {
+    lcdPowerState = LcdPowerState::On;
+    if (display.isSleeping()) {
+      display.wake();
+      renderCurrentScreen();
+    } else if (display.backlightPercent() != Config::LcdBacklightFullPercent) {
+      display.setBacklightPercent(Config::LcdBacklightFullPercent);
+    }
+  } else if (idleStartedMs > 0 &&
+             now - idleStartedMs >= Config::LcdOffAfterIdleMs) {
+    lcdPowerState = LcdPowerState::Off;
+    display.sleep();
+  } else if (idleShouldDim(now)) {
+    lcdPowerState = LcdPowerState::Dim;
+    if (display.isSleeping()) {
+      display.wake();
+      renderCurrentScreen();
+    }
+    display.setBacklightPercent(Config::LcdBacklightDimPercent);
+  } else {
+    lcdPowerState = LcdPowerState::On;
+    if (display.isSleeping()) {
+      display.wake();
+      renderCurrentScreen();
+    } else if (display.backlightPercent() != Config::LcdBacklightFullPercent) {
+      display.setBacklightPercent(Config::LcdBacklightFullPercent);
+    }
+  }
+
+  if (previousState != lcdPowerState) {
+    Serial.print("lcd power: ");
+    Serial.println(lcdPowerStateText());
+    sendDeviceStatus(now, true);
+  }
+}
+
+void sendDeviceStatus(uint32_t now, bool force) {
+  if (!force && now - lastDeviceStatusSentMs < Config::DeviceStatusIntervalMs) {
+    return;
+  }
+  lastDeviceStatusSentMs = now;
+
+  const float tempC = temperatureRead();
+  Serial.print("{\"deviceStatus\":true,\"temperatureC\":");
+  if (isnan(tempC)) {
+    Serial.print("null");
+  } else {
+    Serial.print(tempC, 1);
+  }
+  Serial.print(",\"lcd\":\"");
+  Serial.print(lcdPowerStateText());
+  Serial.print("\",\"backlightPercent\":");
+  Serial.print(display.backlightPercent());
+  Serial.print(",\"uptimeMs\":");
+  Serial.print(now);
+  Serial.println("}");
+}
+
 }
 
 void setup() {
@@ -597,6 +712,8 @@ void loop() {
       state.selfTestRequested = false;
       state.showUsageRequested = false;
       startSelfTest(now);
+    } else if (selfTestActive) {
+      restoreSelfTestStepState();
     } else {
       const bool showUsageRequested = state.showUsageRequested;
       state.showUsageRequested = false;
@@ -635,6 +752,8 @@ void loop() {
   updateScreenSchedule(now);
   updateActivityElapsed(now);
   updateFaceExpression(now);
+  updateDisplayPower(now);
+  sendDeviceStatus(now);
 
   servoArm.update();
   delay(5);
