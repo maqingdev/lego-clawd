@@ -7,18 +7,17 @@ import Foundation
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let controller = LegoClawdController()
-    private var refreshTimer: Timer?
+    private var devDirectoryDescriptor: CInt = -1
+    private var devDirectorySource: DispatchSourceFileSystemObject?
     private lazy var menuBarImage: NSImage? = loadMenuBarImage()
 
-    private let bridgeItem = NSMenuItem(title: "Bridge: stopped", action: nil, keyEquivalent: "")
+    private let bridgeItem = NSMenuItem(title: "Robot Link: stopped", action: nil, keyEquivalent: "")
     private let connectionItem = NSMenuItem(title: "Serial: checking...", action: nil, keyEquivalent: "")
-    private let deviceItem = NSMenuItem(title: "Device: unknown", action: nil, keyEquivalent: "")
+    private let deviceItem = NSMenuItem(title: "Clawd: unknown", action: nil, keyEquivalent: "")
     private let usageFiveHourItem = NSMenuItem(title: "5h --%", action: nil, keyEquivalent: "")
     private let usageWeeklyItem = NSMenuItem(title: "1w --%", action: nil, keyEquivalent: "")
-    private let aiStateItem = NSMenuItem(title: "State: unknown", action: nil, keyEquivalent: "")
-    private let lastActionItem = NSMenuItem(title: "Last: none", action: nil, keyEquivalent: "")
-    private let connectBridgeItem = NSMenuItem(title: "Connect Bridge", action: nil, keyEquivalent: "")
-    private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Bridge", action: nil, keyEquivalent: "")
+    private let connectBridgeItem = NSMenuItem(title: "Connect Robot", action: nil, keyEquivalent: "")
+    private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Robot", action: nil, keyEquivalent: "")
     private let refreshUsageItem = NSMenuItem(title: "Refresh Usage", action: nil, keyEquivalent: "u")
     private let quietModeItem = NSMenuItem(title: "Quiet Mode", action: nil, keyEquivalent: "m")
     private let testStatesItem = NSMenuItem(title: "State Tests", action: nil, keyEquivalent: "")
@@ -56,11 +55,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupMenu()
         refreshStatus()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshStatus()
-            }
-        }
+        setupDevDirectoryMonitor()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        devDirectorySource?.cancel()
+        devDirectorySource = nil
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -83,10 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.addItem(groupHeader("Status"))
         menu.addItem(bridgeItem)
-        menu.addItem(connectionItem)
         menu.addItem(deviceItem)
-        menu.addItem(aiStateItem)
-        menu.addItem(lastActionItem)
         menu.addItem(.separator())
 
         menu.addItem(groupHeader("Usage"))
@@ -114,8 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.items.forEach { $0.target = self }
         bridgeItem.isEnabled = true
         bridgeItem.target = self
-        bridgeItem.action = nil
-        bridgeItem.toolTip = "Toggle bridge connection"
+        bridgeItem.action = #selector(toggleBridge)
+        bridgeItem.toolTip = "Toggle robot connection"
         connectBridgeItem.action = #selector(connectBridge)
         disconnectBridgeItem.action = #selector(disconnectBridge)
         refreshUsageItem.action = #selector(refreshUsage)
@@ -129,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         selfTestItem.action = #selector(selfTest)
         testStateItems.forEach { $0.target = self }
 
-        [connectionItem, deviceItem, usageFiveHourItem, usageWeeklyItem, aiStateItem, lastActionItem].forEach { item in
+        [connectionItem, deviceItem, usageFiveHourItem, usageWeeklyItem].forEach { item in
             item.isEnabled = false
             item.target = nil
             item.action = nil
@@ -139,6 +136,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         refreshStatus()
+    }
+
+    private func setupDevDirectoryMonitor() {
+        let descriptor = open("/dev", O_EVTONLY)
+        guard descriptor >= 0 else {
+            return
+        }
+        devDirectoryDescriptor = descriptor
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor,
+            eventMask: [.write, .delete, .rename],
+            queue: DispatchQueue.main
+        )
+        source.setEventHandler { [weak self] in
+            self?.refreshConnectionStatus()
+        }
+        source.setCancelHandler { [descriptor] in
+            close(descriptor)
+        }
+        source.resume()
+        devDirectorySource = source
     }
 
     private func groupHeader(_ title: String) -> NSMenuItem {
@@ -156,27 +174,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func refreshStatus() {
         let snapshot = controller.snapshot()
-        if menuBarImage != nil {
-            statusItem.button?.alphaValue = snapshot.bridgeRunning ? 1.0 : 0.35
-        } else {
-            statusItem.button?.attributedTitle = fallbackStatusTitle(snapshot)
+        if let deviceQuietMode = snapshot.deviceQuietMode {
+            controller.quietMode = deviceQuietMode
         }
-        bridgeItem.isEnabled = snapshot.isConnected || snapshot.bridgeRunning
-        connectBridgeItem.isEnabled = snapshot.isConnected && !snapshot.bridgeRunning
-        disconnectBridgeItem.isEnabled = snapshot.bridgeRunning
-        refreshUsageItem.isEnabled = true
-        quietModeItem.isEnabled = snapshot.isConnected
-        quietModeItem.state = controller.quietMode ? .on : .off
-        testItems.forEach { $0.isEnabled = snapshot.isConnected }
-        bridgeItem.attributedTitle = menuStatusTitle(
-            dot: snapshot.bridgeRunning ? "●" : "●",
-            dotColor: bridgeDotColor(snapshot),
-            label: "Bridge",
-            value: snapshot.bridgeText,
-            textColor: bridgeItem.isEnabled ? .labelColor : .secondaryLabelColor
+        applyConnectionStatus(
+            isConnected: snapshot.isConnected,
+            bridgeRunning: snapshot.bridgeRunning,
+            connectionText: snapshot.connectionText
         )
-        connectionItem.title = "Serial: \(snapshot.connectionText)"
-        deviceItem.title = "Device: \(snapshot.deviceText)"
+        deviceItem.title = "Clawd: \(clawdStatusText(snapshot))"
+        deviceItem.toolTip = "Serial: \(snapshot.connectionText)\nDevice: \(snapshot.deviceDetailText)"
         usageFiveHourItem.attributedTitle = usageWindowTitle(
             main: snapshot.usageFiveHourText,
             reset: snapshot.usageFiveHourResetText,
@@ -187,9 +194,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             reset: snapshot.usageWeeklyResetText,
             stale: snapshot.usageIsStale
         )
-        aiStateItem.title = "State: \(snapshot.aiState)"
-        lastActionItem.title = "Last: \(snapshot.lastAction)"
-
         if snapshot.usageNeedsRefresh {
             controller.refreshUsageIfNeeded { [weak self] result in
                 Task { @MainActor in
@@ -200,6 +204,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+    }
+
+    private func refreshConnectionStatus() {
+        let snapshot = controller.connectionSnapshot()
+        applyConnectionStatus(
+            isConnected: snapshot.isConnected,
+            bridgeRunning: snapshot.bridgeRunning,
+            connectionText: snapshot.connectionText
+        )
+    }
+
+    private func applyConnectionStatus(
+        isConnected: Bool,
+        bridgeRunning: Bool,
+        connectionText: String
+    ) {
+        if menuBarImage != nil {
+            statusItem.button?.alphaValue = bridgeRunning ? 1.0 : (isConnected ? 0.65 : 0.35)
+        } else {
+            statusItem.button?.attributedTitle = fallbackStatusTitle(
+                isConnected: isConnected,
+                bridgeRunning: bridgeRunning
+            )
+        }
+        bridgeItem.isEnabled = isConnected || bridgeRunning
+        connectBridgeItem.isEnabled = isConnected && !bridgeRunning
+        disconnectBridgeItem.isEnabled = bridgeRunning
+        refreshUsageItem.isEnabled = true
+        quietModeItem.isEnabled = isConnected
+        quietModeItem.state = controller.quietMode ? .on : .off
+        testItems.forEach { $0.isEnabled = isConnected }
+        bridgeItem.attributedTitle = menuStatusTitle(
+            dot: "●",
+            dotColor: bridgeDotColor(isConnected: isConnected, bridgeRunning: bridgeRunning),
+            label: "Robot Link",
+            value: robotLinkText(isConnected: isConnected, bridgeRunning: bridgeRunning),
+            textColor: bridgeItem.isEnabled ? .labelColor : .secondaryLabelColor
+        )
+        connectionItem.title = "Serial: \(connectionText)"
+        deviceItem.title = "Clawd: \(isConnected ? "connected" : "not connected")"
+        deviceItem.toolTip = "Serial: \(connectionText)"
     }
 
     private func loadMenuBarImage() -> NSImage? {
@@ -219,12 +264,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return nil
     }
 
-    private func fallbackStatusTitle(_ snapshot: StatusSnapshot) -> NSAttributedString {
+    private func fallbackStatusTitle(isConnected: Bool, bridgeRunning: Bool) -> NSAttributedString {
         let title = NSMutableAttributedString(string: "Clawd ")
         let dotColor: NSColor
-        if snapshot.bridgeRunning && snapshot.isConnected {
+        if bridgeRunning && isConnected {
             dotColor = .systemGreen
-        } else if snapshot.isConnected {
+        } else if isConnected {
             dotColor = .systemOrange
         } else {
             dotColor = .systemGray
@@ -286,11 +331,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return result
     }
 
-    private func bridgeDotColor(_ snapshot: StatusSnapshot) -> NSColor {
-        if snapshot.bridgeRunning {
+    private func clawdStatusText(_ snapshot: StatusSnapshot) -> String {
+        guard snapshot.isConnected else {
+            return "not connected"
+        }
+
+        var parts = [friendlyState(snapshot.aiState)]
+        if controller.quietMode {
+            parts.append("Quiet")
+        }
+        parts.append(snapshot.deviceTemperatureText)
+        if snapshot.deviceStatusStale {
+            parts.append("stale")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func friendlyState(_ state: String) -> String {
+        switch state {
+        case "idle":
+            return "Idle"
+        case "working":
+            return "Working"
+        case "pending":
+            return "Pending"
+        case "waiting":
+            return "Waiting"
+        case "error":
+            return "Error"
+        case "disconnected":
+            return "Disconnected"
+        case "unknown":
+            return "Unknown"
+        default:
+            return state.prefix(1).uppercased() + state.dropFirst()
+        }
+    }
+
+    private func robotLinkText(isConnected: Bool, bridgeRunning: Bool) -> String {
+        if bridgeRunning {
+            return "connected"
+        }
+        return "not connected"
+    }
+
+    private func bridgeDotColor(isConnected: Bool, bridgeRunning: Bool) -> NSColor {
+        if bridgeRunning {
             return .systemGreen
         }
-        return snapshot.isConnected ? .systemRed : .systemGray
+        return isConnected ? .systemRed : .systemGray
     }
 
     private func runAction(_ name: String, _ action: @escaping () -> Void) {
@@ -306,7 +395,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func connectBridge() {
         runAction("Connect") {
-            self.controller.startBridge()
+            self.controller.startBridge(quietMode: self.controller.quietMode)
         }
     }
 
@@ -317,7 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } else if connectBridgeItem.isEnabled {
             runAction("Connect") {
-                self.controller.startBridge()
+                self.controller.startBridge(quietMode: self.controller.quietMode)
             }
         } else {
             refreshStatus()
@@ -403,7 +492,10 @@ struct StatusSnapshot {
     let isConnected: Bool
     let bridgeRunning: Bool
     let connectionText: String
-    let deviceText: String
+    let deviceTemperatureText: String
+    let deviceDetailText: String
+    let deviceStatusStale: Bool
+    let deviceQuietMode: Bool?
     let usageFiveHourText: String
     let usageFiveHourResetText: String
     let usageWeeklyText: String
@@ -411,8 +503,19 @@ struct StatusSnapshot {
     let usageIsStale: Bool
     let usageNeedsRefresh: Bool
     let aiState: String
-    let bridgeText: String
-    let lastAction: String
+}
+
+struct ConnectionSnapshot {
+    let isConnected: Bool
+    let bridgeRunning: Bool
+    let connectionText: String
+}
+
+struct DeviceStatus {
+    let temperatureText: String
+    let detailText: String
+    let isStale: Bool
+    let quietMode: Bool?
 }
 
 final class LegoClawdController {
@@ -452,7 +555,7 @@ final class LegoClawdController {
     func snapshot() -> StatusSnapshot {
         let ports = serialPorts()
         let state = readAIState()
-        let deviceText = readDeviceStatus()
+        let deviceStatus = readDeviceStatus()
         let usageStatus = readUsageStatus()
         let bridgeRunning = isBridgeRunning()
         let portText = ports.isEmpty ? "no serial device" : ports.joined(separator: ", ")
@@ -460,16 +563,27 @@ final class LegoClawdController {
             isConnected: !ports.isEmpty,
             bridgeRunning: bridgeRunning,
             connectionText: portText,
-            deviceText: deviceText,
+            deviceTemperatureText: deviceStatus.temperatureText,
+            deviceDetailText: deviceStatus.detailText,
+            deviceStatusStale: deviceStatus.isStale,
+            deviceQuietMode: deviceStatus.quietMode,
             usageFiveHourText: usageStatus.fiveHourText,
             usageFiveHourResetText: usageStatus.fiveHourResetText,
             usageWeeklyText: usageStatus.weeklyText,
             usageWeeklyResetText: usageStatus.weeklyResetText,
             usageIsStale: usageStatus.isStale,
             usageNeedsRefresh: usageStatus.needsRefresh,
-            aiState: state,
-            bridgeText: bridgeRunning ? "running" : "stopped",
-            lastAction: lastAction
+            aiState: state
+        )
+    }
+
+    func connectionSnapshot() -> ConnectionSnapshot {
+        let ports = serialPorts()
+        let bridgeRunning = isBridgeRunning()
+        return ConnectionSnapshot(
+            isConnected: !ports.isEmpty,
+            bridgeRunning: bridgeRunning,
+            connectionText: ports.isEmpty ? "no serial device" : ports.joined(separator: ", ")
         )
     }
 
@@ -518,17 +632,17 @@ final class LegoClawdController {
         }
     }
 
-    func startBridge() {
+    func startBridge(quietMode: Bool) {
         let result = runCommand(
             bridgePython.path,
-            [bridgeControl.path, "start"],
+            [bridgeControl.path, "start", "--quiet-mode", quietMode ? "true" : "false"],
             timeout: 8
         )
         if result != 0 {
-            lastAction = "Connect failed: bridge-control \(result)"
+            lastAction = "Connect failed: \(result)"
             return
         }
-        lastAction = isBridgeRunning() ? "Connect: bridge started" : "Connect failed: bridge exited"
+        lastAction = isBridgeRunning() ? "Connect: robot connected" : "Connect failed"
     }
 
     func stopBridge(notifyDevice: Bool = false) {
@@ -606,7 +720,7 @@ final class LegoClawdController {
             Thread.sleep(forTimeInterval: resumeDelay)
         }
         if wasRunning {
-            startBridge()
+            startBridge(quietMode: quietMode)
         }
     }
 
@@ -658,20 +772,28 @@ final class LegoClawdController {
         return "idle"
     }
 
-    private func readDeviceStatus() -> String {
+    private func readDeviceStatus() -> DeviceStatus {
         let url = projectRoot.appendingPathComponent(".lego-clawd/device-status.json")
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return "unknown"
+            return DeviceStatus(
+                temperatureText: "-- C",
+                detailText: "unknown",
+                isStale: true,
+                quietMode: nil
+            )
         }
 
         var parts: [String] = []
+        var temperatureText = "-- C"
         if let temp = json["temperatureC"] as? Double {
-            parts.append(String(format: "ESP32 %.1f C", temp))
+            temperatureText = String(format: "%.1f C", temp)
+            parts.append("temperature \(temperatureText)")
         } else if let temp = json["temperatureC"] as? Int {
-            parts.append("ESP32 \(temp) C")
+            temperatureText = "\(temp) C"
+            parts.append("temperature \(temperatureText)")
         } else {
-            parts.append("ESP32 -- C")
+            parts.append("temperature -- C")
         }
 
         if let lcd = json["lcd"] as? String {
@@ -682,13 +804,31 @@ final class LegoClawdController {
             }
         }
 
+        let quietMode: Bool?
+        if let quiet = json["quietMode"] as? Bool {
+            quietMode = quiet
+            parts.append("quiet \(quiet ? "on" : "off")")
+        } else if let quiet = json["quiet"] as? Bool {
+            quietMode = quiet
+            parts.append("quiet \(quiet ? "on" : "off")")
+        } else {
+            quietMode = nil
+        }
+
+        var isStale = false
         if let updatedAt = json["updatedAt"] as? String,
            let date = ISO8601DateFormatter().date(from: updatedAt),
            Date().timeIntervalSince(date) > 45 {
+            isStale = true
             parts.append("stale")
         }
 
-        return parts.joined(separator: " | ")
+        return DeviceStatus(
+            temperatureText: temperatureText,
+            detailText: parts.joined(separator: " | "),
+            isStale: isStale,
+            quietMode: quietMode
+        )
     }
 
     private struct UsageMenuStatus {
