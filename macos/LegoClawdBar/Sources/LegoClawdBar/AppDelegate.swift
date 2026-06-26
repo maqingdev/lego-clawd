@@ -10,12 +10,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var devDirectoryDescriptor: CInt = -1
     private var devDirectorySource: DispatchSourceFileSystemObject?
     private lazy var menuBarImage: NSImage? = loadMenuBarImage()
+    private var menuBarUsageText = "5h --%"
 
     private let bridgeItem = NSMenuItem(title: "Robot Link: stopped", action: nil, keyEquivalent: "")
     private let connectionItem = NSMenuItem(title: "Serial: checking...", action: nil, keyEquivalent: "")
     private let deviceItem = NSMenuItem(title: "Clawd: unknown", action: nil, keyEquivalent: "")
     private let usageFiveHourItem = NSMenuItem(title: "5h --%", action: nil, keyEquivalent: "")
     private let usageWeeklyItem = NSMenuItem(title: "1w --%", action: nil, keyEquivalent: "")
+    private let usageResetCreditsItem = NSMenuItem(title: "Resets: unavailable", action: nil, keyEquivalent: "")
     private let connectBridgeItem = NSMenuItem(title: "Connect Robot", action: nil, keyEquivalent: "")
     private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Robot", action: nil, keyEquivalent: "")
     private let refreshUsageItem = NSMenuItem(title: "Refresh Usage", action: nil, keyEquivalent: "u")
@@ -69,10 +71,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func setupMenu() {
-        statusItem.length = 26
+        statusItem.length = NSStatusItem.variableLength
         if let menuBarImage {
             statusItem.button?.image = menuBarImage
-            statusItem.button?.imagePosition = .imageOnly
+            statusItem.button?.imagePosition = .imageLeading
+            statusItem.button?.title = menuBarUsageText
+            statusItem.button?.font = NSFont.monospacedDigitSystemFont(
+                ofSize: NSFont.smallSystemFontSize,
+                weight: .regular
+            )
         } else {
             statusItem.button?.title = "Clawd"
         }
@@ -89,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(groupHeader("Usage"))
         menu.addItem(usageFiveHourItem)
         menu.addItem(usageWeeklyItem)
+        menu.addItem(usageResetCreditsItem)
         menu.addItem(refreshUsageItem)
         menu.addItem(.separator())
 
@@ -126,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         selfTestItem.action = #selector(selfTest)
         testStateItems.forEach { $0.target = self }
 
-        [connectionItem, deviceItem, usageFiveHourItem, usageWeeklyItem].forEach { item in
+        [connectionItem, deviceItem, usageFiveHourItem, usageWeeklyItem, usageResetCreditsItem].forEach { item in
             item.isEnabled = false
             item.target = nil
             item.action = nil
@@ -177,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let deviceQuietMode = snapshot.deviceQuietMode {
             controller.quietMode = deviceQuietMode
         }
+        menuBarUsageText = snapshot.usageMenuBarText
         applyConnectionStatus(
             isConnected: snapshot.isConnected,
             bridgeRunning: snapshot.bridgeRunning,
@@ -194,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             reset: snapshot.usageWeeklyResetText,
             stale: snapshot.usageIsStale
         )
+        usageResetCreditsItem.title = snapshot.usageResetCreditsText
         if snapshot.usageNeedsRefresh {
             controller.refreshUsageIfNeeded { [weak self] result in
                 Task { @MainActor in
@@ -221,11 +231,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         connectionText: String
     ) {
         if menuBarImage != nil {
+            statusItem.button?.title = menuBarUsageText
             statusItem.button?.alphaValue = bridgeRunning ? 1.0 : (isConnected ? 0.65 : 0.35)
         } else {
             statusItem.button?.attributedTitle = fallbackStatusTitle(
                 isConnected: isConnected,
-                bridgeRunning: bridgeRunning
+                bridgeRunning: bridgeRunning,
+                usageText: menuBarUsageText
             )
         }
         bridgeItem.isEnabled = isConnected || bridgeRunning
@@ -264,7 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return nil
     }
 
-    private func fallbackStatusTitle(isConnected: Bool, bridgeRunning: Bool) -> NSAttributedString {
+    private func fallbackStatusTitle(isConnected: Bool, bridgeRunning: Bool, usageText: String) -> NSAttributedString {
         let title = NSMutableAttributedString(string: "Clawd ")
         let dotColor: NSColor
         if bridgeRunning && isConnected {
@@ -277,6 +289,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         title.append(NSAttributedString(
             string: "●",
             attributes: [.foregroundColor: dotColor]
+        ))
+        title.append(NSAttributedString(
+            string: " \(usageText)",
+            attributes: [
+                .foregroundColor: NSColor.labelColor,
+                .font: NSFont.monospacedDigitSystemFont(
+                    ofSize: NSFont.smallSystemFontSize,
+                    weight: .regular
+                )
+            ]
         ))
         return title
     }
@@ -498,8 +520,10 @@ struct StatusSnapshot {
     let deviceQuietMode: Bool?
     let usageFiveHourText: String
     let usageFiveHourResetText: String
+    let usageMenuBarText: String
     let usageWeeklyText: String
     let usageWeeklyResetText: String
+    let usageResetCreditsText: String
     let usageIsStale: Bool
     let usageNeedsRefresh: Bool
     let aiState: String
@@ -569,8 +593,10 @@ final class LegoClawdController {
             deviceQuietMode: deviceStatus.quietMode,
             usageFiveHourText: usageStatus.fiveHourText,
             usageFiveHourResetText: usageStatus.fiveHourResetText,
+            usageMenuBarText: usageStatus.menuBarText,
             usageWeeklyText: usageStatus.weeklyText,
             usageWeeklyResetText: usageStatus.weeklyResetText,
+            usageResetCreditsText: usageStatus.resetCreditsText,
             usageIsStale: usageStatus.isStale,
             usageNeedsRefresh: usageStatus.needsRefresh,
             aiState: state
@@ -617,7 +643,7 @@ final class LegoClawdController {
                     "--state",
                     "idle",
                     "--usage-source",
-                    "codex-auth",
+                    "auto",
                     "--usage-state-file",
                     usageState,
                     "--log-file",
@@ -834,8 +860,10 @@ final class LegoClawdController {
     private struct UsageMenuStatus {
         let fiveHourText: String
         let fiveHourResetText: String
+        let menuBarText: String
         let weeklyText: String
         let weeklyResetText: String
+        let resetCreditsText: String
         let isStale: Bool
         let needsRefresh: Bool
     }
@@ -847,15 +875,20 @@ final class LegoClawdController {
             return UsageMenuStatus(
                 fiveHourText: "5h --%",
                 fiveHourResetText: "Reset --",
+                menuBarText: "5h --%",
                 weeklyText: "1w --%",
                 weeklyResetText: "Reset --",
+                resetCreditsText: "Resets: unavailable",
                 isStale: true,
                 needsRefresh: true
             )
         }
 
-        let fiveHour = usageWindowText(json["fiveHour"], label: "5h", resetStyle: .time)
-        let weekly = usageWindowText(json["weekly"], label: "1w", resetStyle: .date)
+        let fiveHourValue = json["fiveHour"]
+        let weeklyValue = json["weekly"]
+        let fiveHour = usageWindowText(fiveHourValue, label: "5h", resetStyle: .time)
+        let weekly = usageWindowText(weeklyValue, label: "1w", resetStyle: .date)
+        let resetCredits = resetCreditsText(json["resetCredits"])
         var isStale = false
 
         if let updatedAt = json["updatedAt"] as? String,
@@ -871,8 +904,10 @@ final class LegoClawdController {
         return UsageMenuStatus(
             fiveHourText: fiveHour.main,
             fiveHourResetText: fiveHour.reset,
+            menuBarText: usageMenuBarText(fiveHourValue: fiveHourValue, weeklyValue: weeklyValue),
             weeklyText: weekly.main,
             weeklyResetText: weekly.reset,
+            resetCreditsText: resetCredits,
             isStale: isStale,
             needsRefresh: isStale
         )
@@ -891,6 +926,40 @@ final class LegoClawdController {
         let remaining = intValue(window["remainingPercent"]).map { "\($0)%" } ?? "--%"
         let reset = resetText(window["resetAt"], style: resetStyle)
         return ("\(label) \(remaining)", "Reset \(reset)")
+    }
+
+    private func usageMenuBarText(fiveHourValue: Any?, weeklyValue: Any?) -> String {
+        let options = [
+            ("5h", usageRemainingPercent(fiveHourValue)),
+            ("1w", usageRemainingPercent(weeklyValue))
+        ].compactMap { label, remaining -> (label: String, remaining: Int)? in
+            guard let remaining else {
+                return nil
+            }
+            return (label, remaining)
+        }
+
+        guard let tightest = options.min(by: { lhs, rhs in lhs.remaining < rhs.remaining }) else {
+            return "5h --%"
+        }
+        return "\(tightest.label) \(tightest.remaining)%"
+    }
+
+    private func usageRemainingPercent(_ value: Any?) -> Int? {
+        guard let window = value as? [String: Any] else {
+            return nil
+        }
+        return intValue(window["remainingPercent"])
+    }
+
+    private func resetCreditsText(_ value: Any?) -> String {
+        guard let credits = value as? [String: Any] else {
+            return "Resets: unavailable"
+        }
+        if let count = intValue(credits["availableCount"]) {
+            return "Resets: \(count) available"
+        }
+        return "Resets: unavailable"
     }
 
     private func resetText(_ value: Any?, style: UsageResetStyle) -> String {

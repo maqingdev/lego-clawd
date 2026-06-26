@@ -8,7 +8,7 @@ void UsageData::begin(AppState &state) {
   state.codex5h.resetAt = "18:30";
   state.codex1w.remainingPercent = 58;
   state.codex1w.resetAt = "Mon 09:00";
-  state.aiActivity = AiActivity::Idle;
+  state.aiActivity = AiActivity::Disconnected;
   state.aiWaitingForInput = false;
   state.selfTestRequested = false;
   state.showUsageRequested = false;

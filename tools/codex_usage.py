@@ -171,14 +171,18 @@ def normalize_rate_limits(data: dict[str, Any]) -> dict[str, Any]:
         snapshot = by_limit_id["codex"]
     if not isinstance(snapshot, dict):
         raise UsageError("missing rateLimits snapshot")
-    return normalize_windows(snapshot.get("primary"), snapshot.get("secondary"))
+    usage = normalize_windows(snapshot.get("primary"), snapshot.get("secondary"))
+    usage["resetCredits"] = normalize_reset_credits(data.get("rateLimitResetCredits"))
+    return usage
 
 
 def normalize_auth_usage(data: dict[str, Any]) -> dict[str, Any]:
     rate_limit = data.get("rate_limit")
     if not isinstance(rate_limit, dict):
         raise UsageError("usage endpoint response missing rate_limit")
-    return normalize_windows(rate_limit.get("primary_window"), rate_limit.get("secondary_window"))
+    usage = normalize_windows(rate_limit.get("primary_window"), rate_limit.get("secondary_window"))
+    usage["resetCredits"] = normalize_reset_credits(data.get("rate_limit_reset_credits"))
+    return usage
 
 
 def normalize_windows(primary: Any, secondary: Any) -> dict[str, Any]:
@@ -203,6 +207,26 @@ def normalize_window(window: Any) -> dict[str, Any]:
         "usedPercent": clamp_percent(used),
         "remainingPercent": clamp_percent(remaining, fallback=100),
         "resetAt": normalize_reset_at(value_for(window, "resetsAt", "resets_at", "resetAt", "reset_at")),
+    }
+
+
+def normalize_reset_credits(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"availableCount": None, "expiresAt": None, "scope": "unknown"}
+
+    available = value_for(value, "availableCount", "available_count")
+    if isinstance(available, str) and available:
+        try:
+            available = int(available)
+        except ValueError:
+            available = None
+    if not isinstance(available, int):
+        available = None
+
+    return {
+        "availableCount": available,
+        "expiresAt": normalize_reset_at(value_for(value, "expiresAt", "expires_at")),
+        "scope": value_for(value, "scope") or "unknown",
     }
 
 
