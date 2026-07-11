@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import select
+import shutil
 import subprocess
 import time
 import urllib.error
@@ -86,7 +87,7 @@ def _read_source(source: str, args: Any) -> dict[str, Any]:
 
 
 def read_codex_cli_rpc(args: Any) -> dict[str, Any]:
-    codex_cli = getattr(args, "codex_cli", None) or os.environ.get("CODEX_CLI") or "codex"
+    codex_cli = find_codex_cli(getattr(args, "codex_cli", None))
     timeout = max(1.0, float(getattr(args, "codex_rpc_timeout", 5.0)))
     request_timeout_at = time.monotonic() + timeout
 
@@ -95,6 +96,7 @@ def read_codex_cli_rpc(args: Any) -> dict[str, Any]:
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=codex_cli_environment(codex_cli),
     )
     try:
         _rpc_send(
@@ -126,6 +128,36 @@ def read_codex_cli_rpc(args: Any) -> dict[str, Any]:
         return normalize_rate_limits(result)
     finally:
         _terminate_process(process)
+
+
+def find_codex_cli(explicit_path: str | None = None) -> str:
+    override = explicit_path or os.environ.get("CODEX_CLI")
+    if override:
+        return override
+
+    candidates = [
+        shutil.which("codex"),
+        "/opt/homebrew/bin/codex",
+        "/usr/local/bin/codex",
+        str(Path.home() / ".local/bin/codex"),
+        "/Applications/Codex.app/Contents/Resources/codex",
+        "/Applications/ChatGPT.app/Contents/Resources/codex",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return "codex"
+
+
+def codex_cli_environment(codex_cli: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    path_entries: list[str] = []
+    if os.path.isabs(codex_cli):
+        path_entries.append(str(Path(codex_cli).parent))
+    path_entries.extend(("/opt/homebrew/bin", "/usr/local/bin"))
+    path_entries.extend(environment.get("PATH", "").split(os.pathsep))
+    environment["PATH"] = os.pathsep.join(dict.fromkeys(entry for entry in path_entries if entry))
+    return environment
 
 
 def read_codex_auth(args: Any) -> dict[str, Any]:
@@ -212,7 +244,12 @@ def normalize_window(window: Any) -> dict[str, Any]:
 
 def normalize_reset_credits(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
-        return {"availableCount": None, "expiresAt": None, "scope": "unknown"}
+        return {
+            "availableCount": None,
+            "expiresAt": None,
+            "scope": "unknown",
+            "credits": None,
+        }
 
     available = value_for(value, "availableCount", "available_count")
     if isinstance(available, str) and available:
@@ -223,10 +260,32 @@ def normalize_reset_credits(value: Any) -> dict[str, Any]:
     if not isinstance(available, int):
         available = None
 
+    raw_credits = value_for(value, "credits")
+    credits = None
+    if isinstance(raw_credits, list):
+        credits = [
+            normalize_reset_credit(credit)
+            for credit in raw_credits
+            if isinstance(credit, dict)
+        ]
+
     return {
         "availableCount": available,
         "expiresAt": normalize_reset_at(value_for(value, "expiresAt", "expires_at")),
         "scope": value_for(value, "scope") or "unknown",
+        "credits": credits,
+    }
+
+
+def normalize_reset_credit(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": value_for(value, "id"),
+        "title": value_for(value, "title"),
+        "description": value_for(value, "description"),
+        "status": value_for(value, "status") or "unknown",
+        "resetType": value_for(value, "resetType", "reset_type") or "unknown",
+        "grantedAt": normalize_reset_at(value_for(value, "grantedAt", "granted_at")),
+        "expiresAt": normalize_reset_at(value_for(value, "expiresAt", "expires_at")),
     }
 
 

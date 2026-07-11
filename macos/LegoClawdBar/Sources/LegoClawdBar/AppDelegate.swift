@@ -18,6 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let usageFiveHourItem = NSMenuItem(title: "5h --%", action: nil, keyEquivalent: "")
     private let usageWeeklyItem = NSMenuItem(title: "1w --%", action: nil, keyEquivalent: "")
     private let usageResetCreditsItem = NSMenuItem(title: "Resets: unavailable", action: nil, keyEquivalent: "")
+    private let usageFiveHourMainLabel = NSTextField(labelWithString: "5h --%")
+    private let usageFiveHourResetLabel = NSTextField(labelWithString: "Reset --")
+    private let usageWeeklyMainLabel = NSTextField(labelWithString: "1w --%")
+    private let usageWeeklyResetLabel = NSTextField(labelWithString: "Reset --")
     private let connectBridgeItem = NSMenuItem(title: "Connect Robot", action: nil, keyEquivalent: "")
     private let disconnectBridgeItem = NSMenuItem(title: "Disconnect Robot", action: nil, keyEquivalent: "")
     private let refreshUsageItem = NSMenuItem(title: "Refresh Usage", action: nil, keyEquivalent: "u")
@@ -88,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
+        setupUsageViews()
         menu.addItem(groupHeader("Status"))
         menu.addItem(bridgeItem)
         menu.addItem(deviceItem)
@@ -134,8 +139,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         selfTestItem.action = #selector(selfTest)
         testStateItems.forEach { $0.target = self }
 
-        [connectionItem, deviceItem, usageFiveHourItem, usageWeeklyItem, usageResetCreditsItem].forEach { item in
+        [connectionItem, deviceItem].forEach { item in
             item.isEnabled = false
+            item.target = nil
+            item.action = nil
+        }
+        [usageFiveHourItem, usageWeeklyItem, usageResetCreditsItem].forEach { item in
             item.target = nil
             item.action = nil
         }
@@ -193,17 +202,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         deviceItem.title = "Clawd: \(clawdStatusText(snapshot))"
         deviceItem.toolTip = "Serial: \(snapshot.connectionText)\nDevice: \(snapshot.deviceDetailText)"
-        usageFiveHourItem.attributedTitle = usageWindowTitle(
+        updateUsageWindowView(
+            mainLabel: usageFiveHourMainLabel,
+            resetLabel: usageFiveHourResetLabel,
             main: snapshot.usageFiveHourText,
             reset: snapshot.usageFiveHourResetText,
             stale: snapshot.usageIsStale
         )
-        usageWeeklyItem.attributedTitle = usageWindowTitle(
+        updateUsageWindowView(
+            mainLabel: usageWeeklyMainLabel,
+            resetLabel: usageWeeklyResetLabel,
             main: snapshot.usageWeeklyText,
             reset: snapshot.usageWeeklyResetText,
             stale: snapshot.usageIsStale
         )
-        usageResetCreditsItem.title = snapshot.usageResetCreditsText
+        updateResetCreditsMenu(
+            summary: snapshot.usageResetCreditsText,
+            expiryTexts: snapshot.usageResetCreditExpiryTexts,
+            stale: snapshot.usageIsStale
+        )
         if snapshot.usageNeedsRefresh {
             controller.refreshUsageIfNeeded { [weak self] result in
                 Task { @MainActor in
@@ -330,27 +347,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return result
     }
 
-    private func usageWindowTitle(main: String, reset: String, stale: Bool) -> NSAttributedString {
-        let result = NSMutableAttributedString()
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = 1
-        result.append(NSAttributedString(
-            string: "\(main)\n",
-            attributes: [
-                .foregroundColor: NSColor.labelColor,
-                .font: NSFont.menuFont(ofSize: NSFont.systemFontSize),
-                .paragraphStyle: paragraph
-            ]
-        ))
-        result.append(NSAttributedString(
-            string: stale ? "\(reset) · Stale" : reset,
-            attributes: [
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .font: NSFont.menuFont(ofSize: 11),
-                .paragraphStyle: paragraph
-            ]
-        ))
-        return result
+    private func setupUsageViews() {
+        usageFiveHourItem.view = usageWindowView(
+            mainLabel: usageFiveHourMainLabel,
+            resetLabel: usageFiveHourResetLabel
+        )
+        usageWeeklyItem.view = usageWindowView(
+            mainLabel: usageWeeklyMainLabel,
+            resetLabel: usageWeeklyResetLabel
+        )
+    }
+
+    private func usageWindowView(mainLabel: NSTextField, resetLabel: NSTextField) -> NSView {
+        configureUsageLabel(
+            mainLabel,
+            font: NSFont.menuFont(ofSize: NSFont.systemFontSize),
+            textColor: .labelColor
+        )
+        configureUsageLabel(
+            resetLabel,
+            font: NSFont.menuFont(ofSize: 11),
+            textColor: .secondaryLabelColor
+        )
+
+        let stack = NSStackView(views: [mainLabel, resetLabel])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 1
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 38))
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+        return view
+    }
+
+    private func configureUsageLabel(_ label: NSTextField, font: NSFont, textColor: NSColor) {
+        label.font = font
+        label.textColor = textColor
+        label.lineBreakMode = .byTruncatingTail
+        label.maximumNumberOfLines = 1
+    }
+
+    private func updateUsageWindowView(
+        mainLabel: NSTextField,
+        resetLabel: NSTextField,
+        main: String,
+        reset: String,
+        stale: Bool
+    ) {
+        mainLabel.stringValue = main
+        resetLabel.stringValue = stale ? "\(reset) · Stale" : reset
+    }
+
+    private func updateResetCreditsMenu(summary: String, expiryTexts: [String], stale: Bool) {
+        usageResetCreditsItem.title = stale ? "\(summary) · Stale" : summary
+
+        guard !expiryTexts.isEmpty else {
+            usageResetCreditsItem.submenu = nil
+            return
+        }
+
+        let submenu = NSMenu()
+        for (index, expiryText) in expiryTexts.enumerated() {
+            let item = NSMenuItem(
+                title: "\(index + 1). Expires \(expiryText)",
+                action: nil,
+                keyEquivalent: ""
+            )
+            item.isEnabled = false
+            submenu.addItem(item)
+        }
+        usageResetCreditsItem.submenu = submenu
     }
 
     private func clawdStatusText(_ snapshot: StatusSnapshot) -> String {
@@ -524,6 +596,7 @@ struct StatusSnapshot {
     let usageWeeklyText: String
     let usageWeeklyResetText: String
     let usageResetCreditsText: String
+    let usageResetCreditExpiryTexts: [String]
     let usageIsStale: Bool
     let usageNeedsRefresh: Bool
     let aiState: String
@@ -543,6 +616,8 @@ struct DeviceStatus {
 }
 
 final class LegoClawdController {
+    private static let weeklyMenuBarWarningPercent = 20
+
     private let projectRoot: URL
     private let bridgeScript: URL
     private let usageBridge: URL
@@ -597,6 +672,7 @@ final class LegoClawdController {
             usageWeeklyText: usageStatus.weeklyText,
             usageWeeklyResetText: usageStatus.weeklyResetText,
             usageResetCreditsText: usageStatus.resetCreditsText,
+            usageResetCreditExpiryTexts: usageStatus.resetCreditExpiryTexts,
             usageIsStale: usageStatus.isStale,
             usageNeedsRefresh: usageStatus.needsRefresh,
             aiState: state
@@ -864,6 +940,7 @@ final class LegoClawdController {
         let weeklyText: String
         let weeklyResetText: String
         let resetCreditsText: String
+        let resetCreditExpiryTexts: [String]
         let isStale: Bool
         let needsRefresh: Bool
     }
@@ -879,6 +956,7 @@ final class LegoClawdController {
                 weeklyText: "1w --%",
                 weeklyResetText: "Reset --",
                 resetCreditsText: "Resets: unavailable",
+                resetCreditExpiryTexts: [],
                 isStale: true,
                 needsRefresh: true
             )
@@ -888,7 +966,7 @@ final class LegoClawdController {
         let weeklyValue = json["weekly"]
         let fiveHour = usageWindowText(fiveHourValue, label: "5h", resetStyle: .time)
         let weekly = usageWindowText(weeklyValue, label: "1w", resetStyle: .date)
-        let resetCredits = resetCreditsText(json["resetCredits"])
+        let resetCredits = resetCreditsDisplay(json["resetCredits"])
         var isStale = false
 
         if let updatedAt = json["updatedAt"] as? String,
@@ -907,7 +985,8 @@ final class LegoClawdController {
             menuBarText: usageMenuBarText(fiveHourValue: fiveHourValue, weeklyValue: weeklyValue),
             weeklyText: weekly.main,
             weeklyResetText: weekly.reset,
-            resetCreditsText: resetCredits,
+            resetCreditsText: resetCredits.summary,
+            resetCreditExpiryTexts: resetCredits.expiryTexts,
             isStale: isStale,
             needsRefresh: isStale
         )
@@ -929,20 +1008,23 @@ final class LegoClawdController {
     }
 
     private func usageMenuBarText(fiveHourValue: Any?, weeklyValue: Any?) -> String {
-        let options = [
-            ("5h", usageRemainingPercent(fiveHourValue)),
-            ("1w", usageRemainingPercent(weeklyValue))
-        ].compactMap { label, remaining -> (label: String, remaining: Int)? in
-            guard let remaining else {
-                return nil
-            }
-            return (label, remaining)
+        let fiveHourRemaining = usageRemainingPercent(fiveHourValue)
+        let weeklyRemaining = usageRemainingPercent(weeklyValue)
+
+        if let weeklyRemaining,
+           weeklyRemaining < Self.weeklyMenuBarWarningPercent {
+            return "1w \(weeklyRemaining)%"
         }
 
-        guard let tightest = options.min(by: { lhs, rhs in lhs.remaining < rhs.remaining }) else {
-            return "5h --%"
+        if let fiveHourRemaining {
+            return "5h \(fiveHourRemaining)%"
         }
-        return "\(tightest.label) \(tightest.remaining)%"
+
+        if let weeklyRemaining {
+            return "1w \(weeklyRemaining)%"
+        }
+
+        return "5h --%"
     }
 
     private func usageRemainingPercent(_ value: Any?) -> Int? {
@@ -952,14 +1034,36 @@ final class LegoClawdController {
         return intValue(window["remainingPercent"])
     }
 
-    private func resetCreditsText(_ value: Any?) -> String {
+    private func resetCreditsDisplay(_ value: Any?) -> (summary: String, expiryTexts: [String]) {
         guard let credits = value as? [String: Any] else {
-            return "Resets: unavailable"
+            return ("Resets: unavailable", [])
         }
+
+        let summary: String
         if let count = intValue(credits["availableCount"]) {
-            return "Resets: \(count) available"
+            summary = "Resets: \(count) available"
+        } else {
+            summary = "Resets: unavailable"
         }
-        return "Resets: unavailable"
+
+        guard let details = credits["credits"] as? [[String: Any]] else {
+            return (summary, [])
+        }
+
+        let expiryDates = details.compactMap { credit -> Date? in
+            if let status = credit["status"] as? String, status != "available" {
+                return nil
+            }
+            guard let expiresAt = credit["expiresAt"] as? String else {
+                return nil
+            }
+            return ISO8601DateFormatter().date(from: expiresAt)
+        }.sorted()
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM d, h:mm:ss a"
+        return (summary, expiryDates.map { formatter.string(from: $0) })
     }
 
     private func resetText(_ value: Any?, style: UsageResetStyle) -> String {
@@ -974,7 +1078,7 @@ final class LegoClawdController {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         switch style {
         case .time:
-            formatter.dateFormat = "HH:mm"
+            formatter.dateFormat = "h:mm a"
         case .date:
             formatter.dateFormat = "MMM d"
         }

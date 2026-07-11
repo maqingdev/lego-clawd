@@ -44,8 +44,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--codex-cli",
-        default="codex",
-        help="Codex CLI executable used for app-server RPC.",
+        help="Codex CLI executable used for app-server RPC. Auto-detected when omitted.",
     )
     parser.add_argument(
         "--codex-rpc-timeout",
