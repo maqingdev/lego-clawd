@@ -616,6 +616,7 @@ struct DeviceStatus {
 }
 
 final class LegoClawdController {
+    private static let resetCreditRelativeThreshold: TimeInterval = 24 * 60 * 60
     private static let weeklyMenuBarWarningPercent = 20
 
     private let projectRoot: URL
@@ -1060,10 +1061,30 @@ final class LegoClawdController {
             return ISO8601DateFormatter().date(from: expiresAt)
         }.sorted()
 
+        let now = Date()
+        return (summary, expiryDates.map { resetCreditExpiryText($0, relativeTo: now) })
+    }
+
+    private func resetCreditExpiryText(_ date: Date, relativeTo now: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "MMM d, h:mm:ss a"
-        return (summary, expiryDates.map { formatter.string(from: $0) })
+        let absoluteText = formatter.string(from: date)
+
+        let remaining = date.timeIntervalSince(now)
+        if remaining <= 0 {
+            return "now · \(absoluteText)"
+        }
+        if remaining <= Self.resetCreditRelativeThreshold {
+            let totalMinutes = max(1, Int(remaining / 60))
+            let hours = totalMinutes / 60
+            let minutes = totalMinutes % 60
+            if hours == 0 {
+                return "in \(minutes)m · \(absoluteText)"
+            }
+            return "in \(hours)h \(minutes)m · \(absoluteText)"
+        }
+        return absoluteText
     }
 
     private func resetText(_ value: Any?, style: UsageResetStyle) -> String {
