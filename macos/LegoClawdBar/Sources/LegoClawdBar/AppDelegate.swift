@@ -413,13 +413,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         let submenu = NSMenu()
+        submenu.autoenablesItems = false
         for (index, expiryText) in expiryTexts.enumerated() {
             let item = NSMenuItem(
                 title: "\(index + 1). Expires \(expiryText)",
                 action: nil,
                 keyEquivalent: ""
             )
-            item.isEnabled = false
+            item.isEnabled = true
             submenu.addItem(item)
         }
         usageResetCreditsItem.submenu = submenu

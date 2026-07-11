@@ -5,6 +5,14 @@ ESP32-S3-LCD-1.9 board, a 1.9-inch LCD, and one LEGO-compatible servo arm. It
 shows Codex usage and agent state on the screen, while the arm gives physical
 feedback for idle, working, approval, and waiting states.
 
+## Showcase
+
+Watch LEGO Clawd turn Codex activity and usage into physical desktop feedback.
+
+[![Watch the LEGO Clawd showcase video](docs/assets/lego-clawd-showcase.jpg)](docs/assets/lego-clawd-showcase.mp4)
+
+Click the preview to watch the 31-second showcase video.
+
 Use VS Code + PlatformIO. Do not use Arduino IDE for this project.
 
 ## Hardware
