@@ -218,15 +218,65 @@ def normalize_auth_usage(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_windows(primary: Any, secondary: Any) -> dict[str, Any]:
+    windows: dict[str, dict[str, Any] | None] = {
+        "fiveHour": None,
+        "weekly": None,
+    }
+    unclassified: list[tuple[str, dict[str, Any]]] = []
+
+    for fallback_name, window in (("fiveHour", primary), ("weekly", secondary)):
+        if not isinstance(window, dict):
+            continue
+        duration = window_duration_minutes(window)
+        if duration is None:
+            unclassified.append((fallback_name, window))
+            continue
+        window_name = "weekly" if duration >= 24 * 60 else "fiveHour"
+        if windows[window_name] is None:
+            windows[window_name] = window
+        else:
+            unclassified.append((fallback_name, window))
+
+    for fallback_name, window in unclassified:
+        if windows[fallback_name] is None:
+            windows[fallback_name] = window
+            continue
+        other_name = "weekly" if fallback_name == "fiveHour" else "fiveHour"
+        if windows[other_name] is None:
+            windows[other_name] = window
+
     return {
-        "fiveHour": normalize_window(primary),
-        "weekly": normalize_window(secondary),
+        "fiveHour": normalize_window(windows["fiveHour"]),
+        "weekly": normalize_window(windows["weekly"]),
     }
 
 
-def normalize_window(window: Any) -> dict[str, Any]:
+def window_duration_minutes(window: dict[str, Any]) -> float | None:
+    minutes = number_value(
+        window,
+        "windowDurationMins",
+        "window_duration_mins",
+        "windowDurationMinutes",
+        "window_duration_minutes",
+    )
+    if minutes is not None:
+        return minutes
+
+    seconds = number_value(
+        window,
+        "limitWindowSeconds",
+        "limit_window_seconds",
+        "windowDurationSeconds",
+        "window_duration_seconds",
+    )
+    if seconds is not None:
+        return seconds / 60
+    return None
+
+
+def normalize_window(window: Any) -> dict[str, Any] | None:
     if not isinstance(window, dict):
-        return {"usedPercent": None, "remainingPercent": 100, "resetAt": None}
+        return None
 
     used = number_value(window, "usedPercent", "used_percent")
     remaining = number_value(window, "remainingPercent", "remaining_percent")
@@ -239,6 +289,7 @@ def normalize_window(window: Any) -> dict[str, Any]:
         "usedPercent": clamp_percent(used),
         "remainingPercent": clamp_percent(remaining, fallback=100),
         "resetAt": normalize_reset_at(value_for(window, "resetsAt", "resets_at", "resetAt", "reset_at")),
+        "durationMinutes": window_duration_minutes(window),
     }
 
 
@@ -328,7 +379,12 @@ def _read_cached_usage(args: Any) -> dict[str, Any] | None:
         data = load_json(path)
     except (FileNotFoundError, UsageError, OSError, json.JSONDecodeError):
         return None
-    if isinstance(data.get("fiveHour"), dict) and isinstance(data.get("weekly"), dict):
+    if not all(key in data for key in ("fiveHour", "weekly")):
+        return None
+    windows = (data.get("fiveHour"), data.get("weekly"))
+    if all(window is None or isinstance(window, dict) for window in windows) and any(
+        isinstance(window, dict) for window in windows
+    ):
         return data
     return None
 

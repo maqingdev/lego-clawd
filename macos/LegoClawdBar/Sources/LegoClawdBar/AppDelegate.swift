@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let controller = LegoClawdController()
     private var devDirectoryDescriptor: CInt = -1
     private var devDirectorySource: DispatchSourceFileSystemObject?
+    private var devDirectoryRefreshWorkItem: DispatchWorkItem?
+    private var knownSerialPorts: [String] = []
     private lazy var menuBarImage: NSImage? = loadMenuBarImage()
     private var menuBarUsageText = "5h --%"
 
@@ -65,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        devDirectoryRefreshWorkItem?.cancel()
+        devDirectoryRefreshWorkItem = nil
         devDirectorySource?.cancel()
         devDirectorySource = nil
     }
@@ -156,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func setupDevDirectoryMonitor() {
+        knownSerialPorts = controller.serialPorts()
         let descriptor = open("/dev", O_EVTONLY)
         guard descriptor >= 0 else {
             return
@@ -167,13 +172,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             queue: DispatchQueue.main
         )
         source.setEventHandler { [weak self] in
-            self?.refreshConnectionStatus()
+            self?.scheduleConnectionRefresh()
         }
         source.setCancelHandler { [descriptor] in
             close(descriptor)
         }
         source.resume()
         devDirectorySource = source
+    }
+
+    private func scheduleConnectionRefresh() {
+        guard devDirectoryRefreshWorkItem == nil else {
+            return
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else {
+                return
+            }
+            self.devDirectoryRefreshWorkItem = nil
+            self.refreshConnectionStatusIfNeeded()
+        }
+        devDirectoryRefreshWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
+    }
+
+    private func refreshConnectionStatusIfNeeded() {
+        let serialPorts = controller.serialPorts()
+        guard serialPorts != knownSerialPorts else {
+            return
+        }
+        knownSerialPorts = serialPorts
+        refreshConnectionStatus(serialPorts: serialPorts)
     }
 
     private func groupHeader(_ title: String) -> NSMenuItem {
@@ -202,6 +232,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         deviceItem.title = "Clawd: \(clawdStatusText(snapshot))"
         deviceItem.toolTip = "Serial: \(snapshot.connectionText)\nDevice: \(snapshot.deviceDetailText)"
+        usageFiveHourItem.isHidden = !snapshot.usageFiveHourAvailable
+        usageWeeklyItem.isHidden = !snapshot.usageWeeklyAvailable
         updateUsageWindowView(
             mainLabel: usageFiveHourMainLabel,
             resetLabel: usageFiveHourResetLabel,
@@ -233,8 +265,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func refreshConnectionStatus() {
-        let snapshot = controller.connectionSnapshot()
+    private func refreshConnectionStatus(serialPorts: [String]? = nil) {
+        let snapshot = controller.connectionSnapshot(serialPorts: serialPorts)
         applyConnectionStatus(
             isConnected: snapshot.isConnected,
             bridgeRunning: snapshot.bridgeRunning,
@@ -591,9 +623,11 @@ struct StatusSnapshot {
     let deviceDetailText: String
     let deviceStatusStale: Bool
     let deviceQuietMode: Bool?
+    let usageFiveHourAvailable: Bool
     let usageFiveHourText: String
     let usageFiveHourResetText: String
     let usageMenuBarText: String
+    let usageWeeklyAvailable: Bool
     let usageWeeklyText: String
     let usageWeeklyResetText: String
     let usageResetCreditsText: String
@@ -668,9 +702,11 @@ final class LegoClawdController {
             deviceDetailText: deviceStatus.detailText,
             deviceStatusStale: deviceStatus.isStale,
             deviceQuietMode: deviceStatus.quietMode,
+            usageFiveHourAvailable: usageStatus.fiveHourAvailable,
             usageFiveHourText: usageStatus.fiveHourText,
             usageFiveHourResetText: usageStatus.fiveHourResetText,
             usageMenuBarText: usageStatus.menuBarText,
+            usageWeeklyAvailable: usageStatus.weeklyAvailable,
             usageWeeklyText: usageStatus.weeklyText,
             usageWeeklyResetText: usageStatus.weeklyResetText,
             usageResetCreditsText: usageStatus.resetCreditsText,
@@ -681,8 +717,8 @@ final class LegoClawdController {
         )
     }
 
-    func connectionSnapshot() -> ConnectionSnapshot {
-        let ports = serialPorts()
+    func connectionSnapshot(serialPorts: [String]? = nil) -> ConnectionSnapshot {
+        let ports = serialPorts ?? self.serialPorts()
         let bridgeRunning = isBridgeRunning()
         return ConnectionSnapshot(
             isConnected: !ports.isEmpty,
@@ -840,7 +876,7 @@ final class LegoClawdController {
         return running
     }
 
-    private func serialPorts() -> [String] {
+    func serialPorts() -> [String] {
         let prefixes = ["cu.usbmodem", "cu.usbserial", "cu.wchusbserial", "cu.SLAB_USBtoUART"]
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: "/dev") else {
             return []
@@ -936,9 +972,11 @@ final class LegoClawdController {
     }
 
     private struct UsageMenuStatus {
+        let fiveHourAvailable: Bool
         let fiveHourText: String
         let fiveHourResetText: String
         let menuBarText: String
+        let weeklyAvailable: Bool
         let weeklyText: String
         let weeklyResetText: String
         let resetCreditsText: String
@@ -952,9 +990,11 @@ final class LegoClawdController {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return UsageMenuStatus(
+                fiveHourAvailable: false,
                 fiveHourText: "5h --%",
                 fiveHourResetText: "Reset --",
-                menuBarText: "5h --%",
+                menuBarText: "Usage --",
+                weeklyAvailable: false,
                 weeklyText: "1w --%",
                 weeklyResetText: "Reset --",
                 resetCreditsText: "Resets: unavailable",
@@ -982,9 +1022,11 @@ final class LegoClawdController {
         }
 
         return UsageMenuStatus(
+            fiveHourAvailable: fiveHourValue is [String: Any],
             fiveHourText: fiveHour.main,
             fiveHourResetText: fiveHour.reset,
             menuBarText: usageMenuBarText(fiveHourValue: fiveHourValue, weeklyValue: weeklyValue),
+            weeklyAvailable: weeklyValue is [String: Any],
             weeklyText: weekly.main,
             weeklyResetText: weekly.reset,
             resetCreditsText: resetCredits.summary,
@@ -1026,7 +1068,7 @@ final class LegoClawdController {
             return "1w \(weeklyRemaining)%"
         }
 
-        return "5h --%"
+        return "Usage --"
     }
 
     private func usageRemainingPercent(_ value: Any?) -> Int? {

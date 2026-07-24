@@ -200,6 +200,10 @@ the stable ESP32 serial fields:
 - 5-hour reset time -> `reset5h`
 - weekly reset date -> `reset1w`
 
+Usage windows are identified by their reported duration rather than their
+primary/secondary position. If Codex reports only a weekly window, the macOS
+menu bar hides the unavailable 5-hour row and uses the weekly value in its title.
+
 The bridge reads AI state from:
 
 ```text
